@@ -72,6 +72,11 @@ NVENC_FLAGS = [
 THUMBNAIL_STYLES = ("classic", "text_reveal", "dramatic")
 _TEXT_REVEAL_FONT_RATIO = 0.12  # larger text for mask/cutout effect
 
+# Background-music defaults
+_BG_MUSIC_VOLUME_DB = -15  # background music level
+_BG_FADE_OUT_SEC = 5.0     # fade-out duration at end
+_TARGET_PEAK_DB = -3.0     # target peak for speech audio
+
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -120,6 +125,58 @@ def _extract_first_frame(video_path):
         return frame
     finally:
         cap.release()
+
+
+def probe_peak_db(audio_path):
+    """Return the peak volume in dB of *audio_path* using FFmpeg volumedetect.
+
+    Returns a float, e.g. ``-8.2`` means peak is at -8.2 dB.
+    Falls back to ``-10.0`` on error so the pipeline never crashes.
+    """
+    import re as _re
+    cmd = [
+        "ffmpeg", "-hide_banner", "-i", os.path.abspath(audio_path),
+        "-af", "volumedetect", "-f", "null", "-",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    # volumedetect prints to stderr:  max_volume: -8.2 dB
+    match = _re.search(r"max_volume:\s*([-\d.]+)\s*dB", result.stderr)
+    if match:
+        return float(match.group(1))
+    return -10.0  # safe fallback
+
+
+def _get_media_duration(media_path):
+    """Return duration in seconds of *media_path* via ffprobe."""
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        os.path.abspath(media_path),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        return float(result.stdout.strip())
+    except (ValueError, AttributeError):
+        return 60.0  # safe fallback
+
+
+def _bg_music_filter(input_idx, total_duration, volume_db=_BG_MUSIC_VOLUME_DB,
+                     fade_out_sec=_BG_FADE_OUT_SEC):
+    """Return FFmpeg filter fragment that loops, trims, levels and fades music.
+
+    Example output::
+
+        [3:a]aloop=loop=-1:size=2e+09,atrim=0:45.0,
+             volume=-15dB,afade=t=out:st=40.0:d=5.0[music]
+    """
+    fade_start = max(0, total_duration - fade_out_sec)
+    return (
+        f"[{input_idx}:a]aloop=loop=-1:size=2e+09,"
+        f"atrim=0:{total_duration:.2f},"
+        f"volume={volume_db}dB,"
+        f"afade=t=out:st={fade_start:.2f}:d={fade_out_sec:.1f}[music]"
+    )
 
 
 def _thumb_font_setup(w, h, hook_text, font_ratio=_THUMB_FONT_RATIO,
@@ -989,29 +1046,54 @@ def assemble_with_title_card(
     audio_source_path,
     output_path,
     title_duration=CINEMATIC_DURATION,
+    speech_gain_db=0.0,
+    bg_music_path=None,
 ):
     """Assemble final short: title card video + subtitled video + delayed audio.
 
-    This replaces the separate ``prepend_title_card`` + ``combine_videos`` steps
-    when a title card is used.  It:
-
     1. Concatenates the title-card and subtitled video streams.
-    2. Takes the audio from *audio_source_path* and delays it by *title_duration*
-       so the speech starts after the title card finishes.
-    3. Outputs a single .mp4 with synced video + audio.
+    2. Takes the audio from *audio_source_path*, boosts by *speech_gain_db*,
+       and delays it by *title_duration* so speech starts after the title card.
+    3. Optionally mixes in background music at -15 dB with a 5 s fade-out.
     """
     delay_ms = int(title_duration * 1000)
 
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
+    # Total duration = title card + subtitled video
+    title_dur = _get_media_duration(title_card_path)
+    sub_dur = _get_media_duration(subtitled_video_path)
+    total_dur = title_dur + sub_dur
+
+    # Build speech filter chain
+    speech_filter = f"[2:a]adelay={delay_ms}|{delay_ms}"
+    if speech_gain_db:
+        speech_filter += f",volume={speech_gain_db:.1f}dB"
+    speech_filter += "[speech]"
+
+    inputs = [
         "-i", os.path.abspath(title_card_path),
         "-i", os.path.abspath(subtitled_video_path),
         "-i", os.path.abspath(audio_source_path),
-        "-filter_complex",
-        (
+    ]
+
+    if bg_music_path and os.path.isfile(bg_music_path):
+        inputs += ["-i", os.path.abspath(bg_music_path)]
+        music_filter = _bg_music_filter(3, total_dur)
+        filter_complex = (
             f"[0:v][1:v]concat=n=2:v=1:a=0[v];"
-            f"[2:a]adelay={delay_ms}|{delay_ms}[a]"
-        ),
+            f"{speech_filter};"
+            f"{music_filter};"
+            f"[speech][music]amix=inputs=2:duration=first:normalize=0[a]"
+        )
+    else:
+        filter_complex = (
+            f"[0:v][1:v]concat=n=2:v=1:a=0[v];"
+            f"{speech_filter.replace('[speech]', '[a]')}"
+        )
+
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        *inputs,
+        "-filter_complex", filter_complex,
         "-map", "[v]",
         "-map", "[a]",
         *NVENC_FLAGS,

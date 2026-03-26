@@ -465,32 +465,93 @@ def crop_to_vertical(input_video_path, output_video_path):
     print(f"Cropping complete. Processed {frame_count} frames -> {output_video_path}")
 
 
-
-def combine_videos(video_with_audio, video_without_audio, output_filename):
+def _get_video_duration(video_path):
+    """Return duration in seconds via ffprobe."""
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        os.path.abspath(video_path),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
     try:
-        command = [
-            "ffmpeg",
-            "-y",
-            "-loglevel",
-            "error",
-            "-i",
-            os.path.abspath(video_without_audio),
-            "-i",
-            os.path.abspath(video_with_audio),
-            "-map",
-            "0:v:0",
-            "-map",
-            "1:a:0?",
-            "-c:v",
-            "copy",
-            "-c:a",
-            "copy",
-            "-shortest",
-            "-movflags",
-            "+faststart",
-            os.path.abspath(output_filename),
-        ]
-        _run_ffmpeg(command, "audio/video mux")
+        return float(result.stdout.strip())
+    except (ValueError, AttributeError):
+        return 60.0
+
+
+def combine_videos(video_with_audio, video_without_audio, output_filename,
+                   speech_gain_db=0.0, bg_music_path=None):
+    try:
+        if not speech_gain_db and not bg_music_path:
+            # Fast path: stream-copy when no audio processing needed
+            command = [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-i",
+                os.path.abspath(video_without_audio),
+                "-i",
+                os.path.abspath(video_with_audio),
+                "-map",
+                "0:v:0",
+                "-map",
+                "1:a:0?",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "copy",
+                "-shortest",
+                "-movflags",
+                "+faststart",
+                os.path.abspath(output_filename),
+            ]
+            _run_ffmpeg(command, "audio/video mux")
+        else:
+            # Audio processing path: gain + optional background music
+            total_dur = _get_video_duration(video_without_audio)
+
+            speech_filter = "[1:a]aresample=48000"
+            if speech_gain_db:
+                speech_filter += f",volume={speech_gain_db:.1f}dB"
+            speech_filter += "[speech]"
+
+            inputs = [
+                "-i", os.path.abspath(video_without_audio),
+                "-i", os.path.abspath(video_with_audio),
+            ]
+
+            if bg_music_path and os.path.isfile(bg_music_path):
+                inputs += ["-i", os.path.abspath(bg_music_path)]
+                fade_start = max(0, total_dur - 5.0)
+                music_filter = (
+                    f"[2:a]aloop=loop=-1:size=2e+09,"
+                    f"atrim=0:{total_dur:.2f},"
+                    f"volume=-15dB,"
+                    f"afade=t=out:st={fade_start:.2f}:d=5.0[music]"
+                )
+                filter_complex = (
+                    f"{speech_filter};"
+                    f"{music_filter};"
+                    f"[speech][music]amix=inputs=2:duration=first:normalize=0[a]"
+                )
+            else:
+                filter_complex = speech_filter.replace("[speech]", "[a]")
+
+            command = [
+                "ffmpeg", "-y", "-loglevel", "error",
+                *inputs,
+                "-filter_complex", filter_complex,
+                "-map", "0:v:0",
+                "-map", "[a]",
+                "-c:v", "copy",
+                "-c:a", "aac", "-b:a", "192k",
+                "-shortest",
+                "-movflags", "+faststart",
+                os.path.abspath(output_filename),
+            ]
+            _run_ffmpeg(command, "audio/video mux with background music")
         print(f"Combined video saved successfully as {output_filename}")
     except Exception as e:
         print(f"Error combining video and audio: {str(e)}")
