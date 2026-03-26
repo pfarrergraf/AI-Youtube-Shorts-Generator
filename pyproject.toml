@@ -1,0 +1,41 @@
+[project]
+name = "ai-youtube-shorts-generator"
+version = "1.0.0"
+description = "Extract highlight clips from long-form videos, crop to vertical 9:16 with face tracking, add subtitles, and export MP4 shorts."
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "faster-whisper>=1.0.0",
+    "moviepy==1.0.3",
+    "numpy>=1.26,<2",
+    "opencv-python>=4.8",
+    "openai>=1.0",
+    "scipy>=1.10",
+    "pydantic>=2.0",
+    "pydub>=0.25",
+    "python-dotenv>=1.0",
+    "pytubefix>=9.0",
+    "torch>=2.0",
+    "ffmpeg-python>=0.2",
+    "webrtcvad-wheels>=2.0",
+]
+
+[project.optional-dependencies]
+cpu = [
+    "faster-whisper>=1.0.0",
+    "moviepy==1.0.3",
+    "numpy>=1.26,<2",
+    "opencv-python>=4.8",
+    "openai>=1.0",
+    "scipy>=1.10",
+    "pydantic>=2.0",
+    "pydub>=0.25",
+    "python-dotenv>=1.0",
+    "pytubefix>=9.0",
+    "torch>=2.0",
+    "ffmpeg-python>=0.2",
+    "webrtcvad-wheels>=2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

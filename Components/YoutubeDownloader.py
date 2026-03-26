@@ -20,35 +20,9 @@ def download_youtube_video(url):
             stream_type = "Progressive" if stream.is_progressive else "Adaptive"
             print(f"  {i}. Resolution: {stream.resolution}, Size: {size:.2f} MB, Type: {stream_type}")
         
-        # Interactive selection with timeout
-        import select
-        import sys
-        
-        print("\nSelect resolution number (0-4) or wait 5s for auto-select...")
-        print("Auto-selecting highest quality in 5 seconds...")
-        
-        selected_stream = None
-        try:
-            ready, _, _ = select.select([sys.stdin], [], [], 5)
-            if ready:
-                user_input = sys.stdin.readline().strip()
-                if user_input.isdigit():
-                    choice = int(user_input)
-                    if 0 <= choice < len(video_streams):
-                        selected_stream = video_streams[choice]
-                        print(f"✓ User selected: {selected_stream.resolution}")
-                    else:
-                        print("Invalid choice, using highest quality")
-                        selected_stream = video_streams[0]
-                else:
-                    print("Invalid input, using highest quality")
-                    selected_stream = video_streams[0]
-            else:
-                print("\nTimeout - auto-selecting highest quality")
-                selected_stream = video_streams[0]
-        except:
-            print("\nAuto-selecting highest quality (timeout not available on this platform)")
-            selected_stream = video_streams[0]
+        # Auto-select highest quality
+        selected_stream = video_streams[0]
+        print(f"\nAuto-selected highest quality: {selected_stream.resolution}")
         
         # Confirm selection
         if selected_stream is None:

@@ -9,10 +9,16 @@ each URL in the file, streams output, and waits for each run to finish before
 continuing. Use `--sleep-between` to add a pause between runs.
 """
 import argparse
+import io
+import os
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+# Force stdout to UTF-8 so we never crash on non-ASCII subprocess output
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True)
 
 
 def read_url_file(path: Path):
@@ -33,9 +39,13 @@ def run_url(url: str, auto_approve: bool, cwd: Path) -> int:
     if auto_approve:
         command.append("--auto-approve")
 
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+
     proc = subprocess.Popen(
         command,
         cwd=str(cwd),
+        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,

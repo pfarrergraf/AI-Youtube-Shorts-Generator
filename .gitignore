@@ -1,20 +1,49 @@
-# Python-related
+# Python
 *.pyc
-**/__pycache__/
-
-# Media Files
-*.wav
-*.mp3
-*.gif
-*.mp4
-*.webm
-*.m4a
+__pycache__/
 
 # Virtual environment
 venv/
 .venv/
 
-# Environment variables
+# Environment / secrets
 .env
 
+# Media & temp files
+*.wav
+*.mp3
+*.mp4
+*.webm
+*.m4a
+*.gif
+
+# Downloaded / generated video directories
+videos/
+shorts_videos/
+
+# Logs
 *.log
+
+# Diffs & patches
+*.diff
+*.patch
+
+# Session artifacts & local notes
+automation/
+plans/
+command.md
+problems.md
+
+# URL lists (user-specific)
+urls.txt
+urls_test.txt
+latzel_urls.txt
+
+# Test / scratch files
+test_fix.py
+test.py
+verify_cuda.py
+debug_run.log
+
+# Legacy / unused
+requirements2.txt
