@@ -393,15 +393,33 @@ def crop_to_vertical(input_video_path, output_video_path):
                                            original_width, original_height)
 
             elif etype == "jump_close":
-                # Instant jump to close-up — held steady (no movement)
-                zoom = eparams["zoom"]
+                # Jump to close-up with smooth ease-in/out over 6 frames
+                zoom_target = eparams["zoom"]
+                ramp = min(6, (ee - es) // 4)
+                if ramp > 0 and (frame_count - es) < ramp:
+                    t = _ease_in_out((frame_count - es) / ramp)
+                    zoom = 1.0 + (zoom_target - 1.0) * t
+                elif ramp > 0 and (ee - frame_count) < ramp:
+                    t = _ease_in_out((ee - frame_count) / ramp)
+                    zoom = 1.0 + (zoom_target - 1.0) * t
+                else:
+                    zoom = zoom_target
                 cropped = _apply_zoom_crop(frame, x_pos, zoom,
                                            vertical_width, vertical_height,
                                            original_width, original_height)
 
             elif etype == "jump_mid":
-                # Instant jump to mid-shot — moderate zoom held steady
-                zoom = eparams["zoom"]
+                # Jump to mid-shot with smooth ease-in/out over 6 frames
+                zoom_target = eparams["zoom"]
+                ramp = min(6, (ee - es) // 4)
+                if ramp > 0 and (frame_count - es) < ramp:
+                    t = _ease_in_out((frame_count - es) / ramp)
+                    zoom = 1.0 + (zoom_target - 1.0) * t
+                elif ramp > 0 and (ee - frame_count) < ramp:
+                    t = _ease_in_out((ee - frame_count) / ramp)
+                    zoom = 1.0 + (zoom_target - 1.0) * t
+                else:
+                    zoom = zoom_target
                 cropped = _apply_zoom_crop(frame, x_pos, zoom,
                                            vertical_width, vertical_height,
                                            original_width, original_height)

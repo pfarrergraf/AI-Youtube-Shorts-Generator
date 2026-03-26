@@ -530,7 +530,8 @@ def _build_word_events(word_timestamps, video_start_time, video_duration):
 
 
 def add_subtitles_to_video(input_video, output_video, transcriptions,
-                           video_start_time=0, word_timestamps=None):
+                           video_start_time=0, word_timestamps=None,
+                           extra_vf=""):
     input_video = os.path.abspath(input_video)
     output_video = os.path.abspath(output_video)
 
@@ -599,6 +600,10 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
         mode = "phrase highlight" if word_events else "chunked"
         print(f"Adding {n_events} subtitle events ({mode}) to video with FFmpeg NVENC...")
 
+        vf_chain = f"subtitles={os.path.basename(subtitle_path)}"
+        if extra_vf:
+            vf_chain = f"{vf_chain},{extra_vf}"
+
         command = [
             "ffmpeg",
             "-y",
@@ -607,7 +612,7 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
             "-i",
             input_video,
             "-vf",
-            f"subtitles={os.path.basename(subtitle_path)}",
+            vf_chain,
             "-an",
             *NVENC_FLAGS,
             output_video,
