@@ -16,12 +16,13 @@ Two modes:
 
 import math
 import os
+import random
 import subprocess
 import tempfile
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 # ── Shared defaults ──────────────────────────────────────────────
 THUMBNAIL_DURATION = 1.0  # seconds — short cover
@@ -66,6 +67,10 @@ NVENC_FLAGS = [
     "-pix_fmt", "yuv420p",
     "-movflags", "+faststart",
 ]
+
+# Thumbnail style catalogue
+THUMBNAIL_STYLES = ("classic", "text_reveal", "dramatic")
+_TEXT_REVEAL_FONT_RATIO = 0.12  # larger text for mask/cutout effect
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -115,6 +120,36 @@ def _extract_first_frame(video_path):
         return frame
     finally:
         cap.release()
+
+
+def _thumb_font_setup(w, h, hook_text, font_ratio=_THUMB_FONT_RATIO,
+                      max_w_ratio=_THUMB_MAX_TEXT_W_RATIO):
+    """Shared font setup: find font, auto-shrink for overflow, wrap text.
+
+    Returns ``(font_path, font, font_size, lines, max_text_w, hook_upper)``.
+    """
+    font_path = _find_font()
+    font_size = max(36, int(h * font_ratio))
+    font = (ImageFont.truetype(font_path, font_size)
+            if font_path else ImageFont.load_default())
+
+    tmp = Image.new("RGBA", (1, 1))
+    draw = ImageDraw.Draw(tmp)
+    max_text_w = int(w * max_w_ratio)
+    hook_upper = hook_text.upper()
+
+    words = hook_upper.split()
+    while font_size > 36 and words:
+        longest = max(words, key=len)
+        bbox = draw.textbbox((0, 0), longest, font=font)
+        if bbox[2] - bbox[0] <= max_text_w:
+            break
+        font_size -= 4
+        font = (ImageFont.truetype(font_path, font_size)
+                if font_path else ImageFont.load_default())
+
+    lines = _wrap_text(hook_upper, font, max_text_w, draw)
+    return font_path, font, font_size, lines, max_text_w, hook_upper
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -267,84 +302,275 @@ def _face_aware_darken(img, face_box, width, height):
     return Image.alpha_composite(img, darken)
 
 
-def _render_thumbnail(frame_bgr, hook_text, accent_keyword=""):
-    """Render a TikTok/YouTube-style thumbnail cover frame.
+# ── Style dispatcher ─────────────────────────────────────────────
 
-    Returns a Pillow RGBA image: visible speaker + bottom gradient + bold text.
-    Face-aware darkening preserves the speaker's face while adding contrast
-    to surrounding areas for text readability.
+def _render_thumbnail(frame_bgr, hook_text, accent_keyword="", style="classic"):
+    """Dispatch to the requested thumbnail style renderer.
+
+    Parameters
+    ----------
+    style : str
+        ``"classic"`` | ``"text_reveal"`` | ``"dramatic"`` | ``"random"`` |
+        ``"auto"``.  ``"random"`` picks uniformly; ``"auto"`` picks based on
+        face detection (text_reveal when a large face is present).
     """
+    if style == "random":
+        style = random.choice(THUMBNAIL_STYLES)
+    elif style == "auto":
+        face_box = _detect_face_box(frame_bgr)
+        h, w = frame_bgr.shape[:2]
+        if face_box is not None:
+            _, _, fw, fh = face_box
+            if (fw * fh) / (w * h) > 0.04:
+                style = random.choice(THUMBNAIL_STYLES)
+            else:
+                style = random.choice(("classic", "dramatic"))
+        else:
+            style = random.choice(("classic", "dramatic"))
+
+    if style == "text_reveal":
+        return _render_thumbnail_text_reveal(frame_bgr, hook_text, accent_keyword)
+    elif style == "dramatic":
+        return _render_thumbnail_dramatic(frame_bgr, hook_text, accent_keyword)
+    return _render_thumbnail_classic(frame_bgr, hook_text, accent_keyword)
+
+
+# ── Style: classic ───────────────────────────────────────────────
+
+def _render_thumbnail_classic(frame_bgr, hook_text, accent_keyword=""):
+    """TikTok/YouTube-style thumbnail: visible speaker + gradient + bold text."""
     h, w = frame_bgr.shape[:2]
 
-    # Convert to Pillow (NO heavy blur — speaker must be visible)
     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     img = Image.fromarray(frame_rgb).convert("RGBA")
 
-    # Face-aware selective darkening (Ergänzung 3)
     face_box = _detect_face_box(frame_bgr)
     img = _face_aware_darken(img, face_box, w, h)
 
-    # Bottom gradient: dark at bottom, transparent at top
+    # Bottom gradient
     gradient = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     grad_draw = ImageDraw.Draw(gradient)
-    gradient_start = int(h * 0.50)  # gradient starts at 50% height
+    gradient_start = int(h * 0.50)
     for y_pos in range(gradient_start, h):
         frac = (y_pos - gradient_start) / (h - gradient_start)
-        alpha = int(180 * frac * frac)  # quadratic ramp
+        alpha = int(180 * frac * frac)
         grad_draw.line([(0, y_pos), (w, y_pos)], fill=(0, 0, 0, alpha))
     img = Image.alpha_composite(img, gradient)
 
-    # Face-aware text placement (reuse already-detected face_box)
     lane_top, lane_bottom = _pick_text_lane(face_box, w, h)
-
-    # ── Render hook text ──
-    font_path = _find_font()
-    font_size = max(36, int(h * _THUMB_FONT_RATIO))
-    if font_path:
-        title_font = ImageFont.truetype(font_path, font_size)
-    else:
-        title_font = ImageFont.load_default()
+    font_path, title_font, font_size, lines, max_text_w, hook_upper = (
+        _thumb_font_setup(w, h, hook_text)
+    )
 
     draw = ImageDraw.Draw(img)
-    max_text_w = int(w * _THUMB_MAX_TEXT_W_RATIO)
-    hook_upper = hook_text.upper()
-
-    # Auto-shrink font when any single word overflows the max text width
-    words = hook_upper.split()
-    while font_size > 36 and words:
-        longest = max(words, key=len)
-        bbox = draw.textbbox((0, 0), longest, font=title_font)
-        if bbox[2] - bbox[0] <= max_text_w:
-            break
-        font_size -= 4
-        if font_path:
-            title_font = ImageFont.truetype(font_path, font_size)
-        else:
-            title_font = ImageFont.load_default()
-
-    lines = _wrap_text(hook_upper, title_font, max_text_w, draw)
     line_height = int(font_size * 1.30)
     total_text_h = line_height * len(lines)
-
-    # Center text vertically in the chosen lane
     lane_h = lane_bottom - lane_top
     text_y = lane_top + max(0, (lane_h - total_text_h) // 2)
 
     accent_upper = accent_keyword.upper() if accent_keyword else ""
 
     for line in lines:
-        # Measure full line width for centering
         bbox = draw.textbbox((0, 0), line, font=title_font)
         line_w = bbox[2] - bbox[0]
         x = (w - line_w) // 2
 
         if accent_upper and accent_upper in line:
-            # Draw word by word, accent keyword in color
             _draw_line_with_accent(
                 draw, x, text_y, line, accent_upper, title_font, ACCENT_COLOUR
             )
         else:
-            # Strong drop shadow
+            for dx, dy in [(-2, -2), (2, -2), (-2, 2), (2, 2), (0, 3), (0, -3)]:
+                draw.text((x + dx, text_y + dy), line, font=title_font,
+                          fill=(0, 0, 0, 200))
+            draw.text((x, text_y), line, font=title_font,
+                      fill=(255, 255, 255, 255))
+
+        text_y += line_height
+
+    return img
+
+
+# ── Style: text_reveal (alpha-mask) ─────────────────────────────
+
+def _render_thumbnail_text_reveal(frame_bgr, hook_text, accent_keyword=""):
+    """Alpha-mask style: hook text reveals the speaker through letter cutouts.
+
+    The frame is heavily darkened; the hook text acts as a window that
+    shows the bright, slightly saturated speaker underneath.  A thin
+    stroke outlines each letter for definition.
+    """
+    h, w = frame_bgr.shape[:2]
+
+    # Bright base — slightly boosted saturation + contrast
+    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    base = Image.fromarray(frame_rgb).convert("RGB")
+    base = ImageEnhance.Color(base).enhance(1.30)
+    base = ImageEnhance.Contrast(base).enhance(1.15)
+    base = base.convert("RGBA")
+
+    # Dark version — same frame, heavy overlay
+    dark = Image.fromarray(frame_rgb).convert("RGBA")
+    dark = Image.alpha_composite(dark, Image.new("RGBA", (w, h), (0, 0, 0, 185)))
+
+    # Bottom gradient on dark layer too
+    gradient = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    grad_draw = ImageDraw.Draw(gradient)
+    for y_pos in range(int(h * 0.55), h):
+        frac = (y_pos - h * 0.55) / (h * 0.45)
+        alpha = int(70 * frac)
+        grad_draw.line([(0, y_pos), (w, y_pos)], fill=(0, 0, 0, alpha))
+    dark = Image.alpha_composite(dark, gradient)
+
+    # Font (larger than classic for a bolder mask)
+    font_path, title_font, font_size, lines, max_text_w, hook_upper = (
+        _thumb_font_setup(w, h, hook_text, font_ratio=_TEXT_REVEAL_FONT_RATIO)
+    )
+
+    # Text lane
+    face_box = _detect_face_box(frame_bgr)
+    lane_top, lane_bottom = _pick_text_lane(face_box, w, h)
+    line_height = int(font_size * 1.20)
+    total_text_h = line_height * len(lines)
+    lane_h = lane_bottom - lane_top
+    text_y_start = lane_top + max(0, (lane_h - total_text_h) // 2)
+
+    # ── Build text mask (white = reveal speaker) ──
+    mask = Image.new("L", (w, h), 0)
+    mask_draw = ImageDraw.Draw(mask)
+
+    text_y = text_y_start
+    for line in lines:
+        bbox = mask_draw.textbbox((0, 0), line, font=title_font)
+        line_w = bbox[2] - bbox[0]
+        x = (w - line_w) // 2
+        # Slight stroke expansion so the window is wider than the outline
+        mask_draw.text((x, text_y), line, font=title_font, fill=255,
+                       stroke_width=4, stroke_fill=255)
+        text_y += line_height
+
+    # Composite: bright base where mask=255, dark where mask=0
+    result = Image.composite(base, dark, mask)
+
+    # ── Thin text outline for definition ──
+    outline = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    outline_draw = ImageDraw.Draw(outline)
+    accent_upper = accent_keyword.upper() if accent_keyword else ""
+
+    text_y = text_y_start
+    for line in lines:
+        bbox = outline_draw.textbbox((0, 0), line, font=title_font)
+        line_w = bbox[2] - bbox[0]
+        x = (w - line_w) // 2
+
+        stroke_colour = (255, 255, 255, 190)
+        if accent_upper and accent_upper in line:
+            # Accent word gets red outline
+            idx = line.find(accent_upper)
+            if idx >= 0:
+                before = line[:idx]
+                accent = line[idx:idx + len(accent_upper)]
+                after = line[idx + len(accent_upper):]
+                cur_x = x
+                if before:
+                    outline_draw.text(
+                        (cur_x, text_y), before, font=title_font,
+                        fill=(0, 0, 0, 0), stroke_width=2,
+                        stroke_fill=stroke_colour)
+                    cur_x += outline_draw.textbbox(
+                        (0, 0), before, font=title_font)[2]
+                if accent:
+                    outline_draw.text(
+                        (cur_x, text_y), accent, font=title_font,
+                        fill=(0, 0, 0, 0), stroke_width=2,
+                        stroke_fill=(*ACCENT_COLOUR[:3], 220))
+                    cur_x += outline_draw.textbbox(
+                        (0, 0), accent, font=title_font)[2]
+                if after:
+                    outline_draw.text(
+                        (cur_x, text_y), after, font=title_font,
+                        fill=(0, 0, 0, 0), stroke_width=2,
+                        stroke_fill=stroke_colour)
+            else:
+                outline_draw.text(
+                    (x, text_y), line, font=title_font,
+                    fill=(0, 0, 0, 0), stroke_width=2,
+                    stroke_fill=stroke_colour)
+        else:
+            outline_draw.text(
+                (x, text_y), line, font=title_font,
+                fill=(0, 0, 0, 0), stroke_width=2,
+                stroke_fill=stroke_colour)
+        text_y += line_height
+
+    result = Image.alpha_composite(result, outline)
+    return result
+
+
+# ── Style: dramatic ──────────────────────────────────────────────
+
+def _render_thumbnail_dramatic(frame_bgr, hook_text, accent_keyword=""):
+    """Desaturated high-contrast style with heavy vignette + bold text."""
+    h, w = frame_bgr.shape[:2]
+
+    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    base = Image.fromarray(frame_rgb).convert("RGB")
+
+    # Partial desaturation (70 % toward grayscale) + contrast boost
+    img = ImageEnhance.Color(base).enhance(0.30)
+    img = ImageEnhance.Contrast(img).enhance(1.35)
+    img = img.convert("RGBA")
+
+    # Face-aware darkening
+    face_box = _detect_face_box(frame_bgr)
+    img = _face_aware_darken(img, face_box, w, h)
+
+    # Heavy elliptical vignette
+    vig = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    vig_draw = ImageDraw.Draw(vig)
+    cx, cy = w // 2, h // 2
+    max_r = math.hypot(cx, cy)
+    for i in range(40, 0, -1):
+        frac = i / 40
+        alpha = int(120 * frac * frac)
+        r = int(max_r * frac)
+        vig_draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(0, 0, 0, alpha))
+    img = Image.alpha_composite(img, vig)
+
+    # Strong bottom gradient
+    gradient = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    grad_draw = ImageDraw.Draw(gradient)
+    grad_start = int(h * 0.40)
+    for y_pos in range(grad_start, h):
+        frac = (y_pos - grad_start) / (h - grad_start)
+        alpha = int(200 * frac * frac)
+        grad_draw.line([(0, y_pos), (w, y_pos)], fill=(0, 0, 0, alpha))
+    img = Image.alpha_composite(img, gradient)
+
+    # Text (same layout logic as classic)
+    lane_top, lane_bottom = _pick_text_lane(face_box, w, h)
+    font_path, title_font, font_size, lines, max_text_w, hook_upper = (
+        _thumb_font_setup(w, h, hook_text)
+    )
+
+    draw = ImageDraw.Draw(img)
+    line_height = int(font_size * 1.30)
+    total_text_h = line_height * len(lines)
+    lane_h = lane_bottom - lane_top
+    text_y = lane_top + max(0, (lane_h - total_text_h) // 2)
+
+    accent_upper = accent_keyword.upper() if accent_keyword else ""
+
+    for line in lines:
+        bbox = draw.textbbox((0, 0), line, font=title_font)
+        line_w = bbox[2] - bbox[0]
+        x = (w - line_w) // 2
+
+        if accent_upper and accent_upper in line:
+            _draw_line_with_accent(
+                draw, x, text_y, line, accent_upper, title_font, ACCENT_COLOUR
+            )
+        else:
             for dx, dy in [(-2, -2), (2, -2), (-2, 2), (2, 2), (0, 3), (0, -3)]:
                 draw.text((x + dx, text_y + dy), line, font=title_font,
                           fill=(0, 0, 0, 200))
@@ -409,6 +635,7 @@ def generate_thumbnail_card(
     duration=THUMBNAIL_DURATION,
     output_path=None,
     thumbnail_image_path=None,
+    style="random",
 ):
     """Create a thumbnail-style hook video (speaker visible, bold text overlay).
 
@@ -429,19 +656,41 @@ def generate_thumbnail_card(
     thumbnail_image_path : str, optional
         Where to write the standalone thumbnail image.
         Defaults to ``<output_dir>/<video_basename>_thumb.jpg``.
+    style : str
+        ``"random"`` (default), ``"auto"``, ``"classic"``,
+        ``"text_reveal"``, or ``"dramatic"``.
 
     Returns
     -------
-    tuple[str, str]
-        ``(video_path, thumbnail_image_path)`` — paths to the generated
-        thumbnail video and the standalone thumbnail image.
+    tuple[str, str, str]
+        ``(video_path, thumbnail_image_path, style_used)`` — paths to the
+        generated thumbnail video, the standalone thumbnail image, and the
+        name of the style that was rendered.
     """
     frame = _select_best_frame(video_path)
     fps = _get_video_fps(video_path)
     h_frame, w_frame = frame.shape[:2]
     total_frames = int(fps * duration)
 
-    img = _render_thumbnail(frame, hook_text, accent_keyword)
+    # Resolve the actual style name before rendering
+    resolved_style = style
+    if style in ("random", "auto"):
+        # Pre-resolve so we can report which style was used
+        if style == "random":
+            resolved_style = random.choice(THUMBNAIL_STYLES)
+        else:
+            face_box = _detect_face_box(frame)
+            if face_box is not None:
+                _, _, fw, fh = face_box
+                if (fw * fh) / (w_frame * h_frame) > 0.04:
+                    resolved_style = random.choice(THUMBNAIL_STYLES)
+                else:
+                    resolved_style = random.choice(("classic", "dramatic"))
+            else:
+                resolved_style = random.choice(("classic", "dramatic"))
+
+    img = _render_thumbnail(frame, hook_text, accent_keyword,
+                            style=resolved_style)
 
     # ── Export standalone thumbnail image (Ergänzung 1) ──
     if thumbnail_image_path is None:
@@ -499,7 +748,7 @@ def generate_thumbnail_card(
     except OSError:
         pass
 
-    return output_path, thumbnail_image_path
+    return output_path, thumbnail_image_path, resolved_style
 
 
 # ══════════════════════════════════════════════════════════════════
