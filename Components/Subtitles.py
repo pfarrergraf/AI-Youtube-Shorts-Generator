@@ -391,17 +391,17 @@ def _normalise_phrase_timings(word_events):
             ws = max(w["start"], cursor)
 
             if j + 1 < n:
-                # Mid-phrase: extend seamlessly to next word's start.
-                we = max(ws + MIN_WORD_DISPLAY_SEC, phrase[j + 1]["start"])
+                # Mid-phrase: use next word's start (no gap within phrase).
+                we = max(ws + 0.001, phrase[j + 1]["start"])
             elif i + 1 < total and word_events[i + 1]:
-                # Last word of phrase: hold, but never overlap next phrase
+                # Last word of phrase: hold briefly, but never overlap next phrase
                 natural = w["end"] + HOLD_AFTER_PHRASE_SEC
                 next_start = word_events[i + 1][0]["start"]
                 we = min(natural, next_start)
-                we = max(we, ws + MIN_WORD_DISPLAY_SEC)
+                we = max(we, ws + 0.001)
             else:
                 # Very last word overall
-                we = max(ws + MIN_WORD_DISPLAY_SEC, w["end"] + HOLD_AFTER_PHRASE_SEC)
+                we = max(ws + 0.001, w["end"] + HOLD_AFTER_PHRASE_SEC)
 
             copied.append({"text": w["text"], "start": ws, "end": we})
             cursor = we
