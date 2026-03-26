@@ -241,21 +241,23 @@ The transcription has TWO entry types:
 Your job: find ALL self-contained episodes that would each make a compelling short-form video clip.
 
 WHAT MAKES A CLIP GREAT (in order of importance):
-1. **Complete story arc with a PAYOFF** — Every clip MUST end with a clear payoff: a punchline, a surprising twist, an emotional revelation, a moment of laughter, or a profound insight. A story without its ending is WORTHLESS. The payoff is what makes people rewatch.
+1. **Complete story arc with a PAYOFF** — Every clip MUST end with a clear payoff: a punchline -- better multiple punchlines each adding another layer --, a surprising twist or multiple twists, an emotional revelation, a moment of laughter, or a profound insight. A story without its ending is WORTHLESS, unless it is a strong part conveying a message. The payoff is what makes people rewatch.
 2. **Audience impact** — The clip should make the viewer feel something: laugh, think, get goosebumps, feel convicted, or be genuinely surprised. Rate this honestly.
 3. **Rhetorical power** — Vivid imagery, compelling analogies, well-timed pauses, rhetorical questions with answers, escalating tension, voice modulation implied by the text (exclamations, short punchy sentences, repetition).
 4. **Self-contained meaning** — A first-time viewer who has NEVER seen the full video must fully understand the clip. No dangling references, no "as I said earlier".
 5. **Psychological hooks** — Stories with conflict, unexpected turns, relatable situations, or statements that challenge assumptions.
 6. **Theological/intellectual precision** — Interesting biblical insights, counter-intuitive interpretations, connections the audience hasn't heard before.
+7. Humor — jokes, witty remarks, playful language, or funny situations. Humor is a strong engagement driver but must be complete with the punchline and reaction.
 
 HOW TO IDENTIFY COMPLETE SEQUENCES:
-1. **Read the ENTIRE transcription first.** Map out where each distinct topic, story, or argument begins and ends.
-2. **A sequence starts** where the speaker introduces a new premise or topic. Signals: topic shift, setup phrase ("Also...", "Und dann...", "Stellt euch vor...", "Ich weiß noch..."), or a new subject after a pause/reaction.
+1. **Read the ENTIRE transcription first.** Map out where each distinct topic, story, joke or argument begins and ends.
+2. **A sequence starts** where the speaker introduces a new premise or topic. Signals: topic shift, setup phrase ("Also...", "Und dann...", "Stellt euch vor...", "Ich weiß noch..."), ("Wenn du...") or a new subject after a pause/reaction.
 3. **A sequence MUST end AFTER the payoff.** This is the most critical rule:
    - If a story leads to a funny moment → include the laughter/reaction COMPLETELY
    - If an argument builds to a conclusion → include the conclusion sentence
    - If there's an audience reaction → your end time MUST be AFTER the END timestamp of the last reaction
    - If someone says something witty and the audience laughs → that laugh IS the ending, don't cut before it
+   - If we have a story with multiple punchlines → include them all until the story truly ends
 4. **Never end a clip during setup.** If the story is "X happened, and then Y said Z" — you MUST include what Z said and how the audience reacted.
 
 CRITICAL RULES:
@@ -790,6 +792,56 @@ def GetJumpCuts(transcription_text, start, end):
     except Exception as e:
         print(f"Jump-cut analysis failed ({e}); proceeding without jump cuts.")
         return []
+
+
+# ── Title-card hook generation ───────────────────────────────────
+
+TITLE_HOOK_PROMPT = """\
+You generate short, attention-grabbing title-card text for sermon/talk short clips on social media.
+
+You receive:
+- The clip's content summary (what happens in the clip).
+- The video title (for context).
+
+Your job: write a HOOK — a short, punchy text (3-10 words, max 60 characters) that makes the viewer curious enough to watch. This appears as a title card for 2-3 seconds before the clip starts.
+
+Rules:
+- Must create curiosity or tension — the viewer should NEED to see what happens next.
+- German if the content is German, English if the content is English.
+- Use natural, spoken-style language — not academic or formal.
+- DO NOT spoil the punchline or conclusion.
+- Rhetorical questions work well: "Was wäre, wenn...?", "Warum hat Gott...?"
+- Bold statements work well: "Das hat er WIRKLICH gesagt.", "Niemand hat damit gerechnet."
+- Emotional hooks work well: "Dieser Moment hat alles verändert."
+- DO NOT use hashtags, emojis, or clickbait phrases like "UNGLAUBLICH".
+- Return ONLY the hook text — no quotes, no explanation, no JSON."""
+
+
+def GenerateTitleHook(clip_content, video_title="", language="de"):
+    """Ask the LLM to generate a catchy 3-10 word hook for a title card.
+
+    Falls back to a truncated *clip_content* if the LLM call fails.
+    """
+    user_msg = (
+        f"Video title: {video_title}\n"
+        f"Clip summary: {clip_content}\n"
+        f"Language: {language}"
+    )
+
+    try:
+        hook = _call_llm(TITLE_HOOK_PROMPT, user_msg, temperature=0.8)
+        # Strip any stray quotes the LLM might add
+        hook = hook.strip().strip('"').strip("'").strip('"').strip('"')
+        if len(hook) > 80:
+            hook = hook[:77] + "…"
+        if hook:
+            return hook
+    except Exception as exc:
+        print(f"[TitleHook] LLM call failed ({exc}); using fallback.")
+
+    # Fallback: first 60 chars of clip_content
+    fallback = clip_content[:60].rsplit(" ", 1)[0] if len(clip_content) > 60 else clip_content
+    return fallback
 
 
 if __name__ == "__main__":
