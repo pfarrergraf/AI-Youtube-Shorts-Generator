@@ -797,50 +797,72 @@ def GetJumpCuts(transcription_text, start, end):
 # ── Title-card hook generation ───────────────────────────────────
 
 TITLE_HOOK_PROMPT = """\
-You generate short, attention-grabbing title-card text for sermon/talk short clips on social media.
+You write short title text for social media sermon/talk clips.  This text appears as a title card for 2–3 seconds before the clip starts.
 
 You receive:
-- The clip's content summary (what happens in the clip).
-- The video title (for context).
+- The actual TRANSCRIPT of the clip (the literal spoken words).
+- A content summary.
+- The video title.
 
-Your job: write a HOOK — a short, punchy text (3-10 words, max 60 characters) that makes the viewer curious enough to watch. This appears as a title card for 2-3 seconds before the clip starts.
+Your job: Write a MESSAGE TITLE — 3-8 words, max 50 characters — that captures the CORE MESSAGE the speaker is communicating.
 
-Rules:
-- Must create curiosity or tension — the viewer should NEED to see what happens next.
-- German if the content is German, English if the content is English.
+CRITICAL RULES:
+- The title MUST include at least one key word or phrase DIRECTLY from the transcript.
+- Communicate the core message or insight — do NOT tease or ask vague questions.
+- Think of it as a sermon headline that summarizes what the speaker says.
+- German if the transcript is German, English if English.
 - Use natural, spoken-style language — not academic or formal.
-- DO NOT spoil the punchline or conclusion.
-- Rhetorical questions work well: "Was wäre, wenn...?", "Warum hat Gott...?"
-- Bold statements work well: "Das hat er WIRKLICH gesagt.", "Niemand hat damit gerechnet."
-- Emotional hooks work well: "Dieser Moment hat alles verändert."
-- DO NOT use hashtags, emojis, or clickbait phrases like "UNGLAUBLICH".
-- Return ONLY the hook text — no quotes, no explanation, no JSON."""
+- NO rhetorical questions starting with "Was wäre wenn" — state the message instead.
+- NO hashtags, emojis, or clickbait phrases ("UNGLAUBLICH", "DAS MUSST DU SEHEN").
+- If the speaker makes a bold statement, USE their words as the title.
+- If the speaker tells a story, title it after the lesson or turning point.
+
+GOOD examples (each uses words FROM the transcript):
+- "Gott gibt dir mehr als genug"
+- "Drei Mal schlagen — nicht aufhören"
+- "Joas hätte weiterschlagen sollen"
+- "Das Wort Gottes verändert alles"
+- "Gnade ist kein Verdienst"
+
+BAD examples:
+- "Was wäre, wenn...?" (too vague, no message, not from transcript)
+- "Dieser Moment hat alles verändert" (generic, not from transcript)
+- "Du wirst nicht glauben was passiert" (clickbait)
+- "Was wäre, wenn dein Bruder das Wichtigste war?" (question, not a message)
+
+Return ONLY the title text — no quotes, no explanation, no JSON."""
 
 
-def GenerateTitleHook(clip_content, video_title="", language="de"):
-    """Ask the LLM to generate a catchy 3-10 word hook for a title card.
+def GenerateTitleHook(clip_content, clip_transcript="", video_title="", language="de"):
+    """Ask the LLM to generate a message-based title for a title card.
 
+    *clip_transcript* is the actual spoken text of the clip segment.
     Falls back to a truncated *clip_content* if the LLM call fails.
     """
-    user_msg = (
-        f"Video title: {video_title}\n"
-        f"Clip summary: {clip_content}\n"
-        f"Language: {language}"
-    )
+    parts = [f"Video title: {video_title}"]
+    if clip_transcript:
+        # Limit transcript to ~800 chars to avoid token waste
+        t = clip_transcript[:800]
+        if len(clip_transcript) > 800:
+            t = t.rsplit(" ", 1)[0] + " …"
+        parts.append(f"Transcript:\n{t}")
+    parts.append(f"Content summary: {clip_content}")
+    parts.append(f"Language: {language}")
+    user_msg = "\n\n".join(parts)
 
     try:
-        hook = _call_llm(TITLE_HOOK_PROMPT, user_msg, temperature=0.8)
+        hook = _call_llm(TITLE_HOOK_PROMPT, user_msg, temperature=0.7)
         # Strip any stray quotes the LLM might add
-        hook = hook.strip().strip('"').strip("'").strip('"').strip('"')
-        if len(hook) > 80:
-            hook = hook[:77] + "…"
+        hook = hook.strip().strip('"').strip("'").strip('\u201c').strip('\u201d')
+        if len(hook) > 60:
+            hook = hook[:57] + "\u2026"
         if hook:
             return hook
     except Exception as exc:
         print(f"[TitleHook] LLM call failed ({exc}); using fallback.")
 
-    # Fallback: first 60 chars of clip_content
-    fallback = clip_content[:60].rsplit(" ", 1)[0] if len(clip_content) > 60 else clip_content
+    # Fallback: first 50 chars of clip_content
+    fallback = clip_content[:50].rsplit(" ", 1)[0] if len(clip_content) > 50 else clip_content
     return fallback
 
 
