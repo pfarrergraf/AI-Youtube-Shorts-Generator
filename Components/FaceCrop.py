@@ -219,7 +219,12 @@ def _apply_zoom_crop(frame, x_pos, zoom, vertical_width, vertical_height,
 
 
 def crop_to_vertical(input_video_path, output_video_path):
-    """Crop video to vertical 9:16 format with professional camera tracking and effects."""
+    """Crop video to vertical 9:16 format with professional camera tracking and effects.
+
+    Returns:
+        list of (etype, start_sec, end_sec) tuples describing camera effects,
+        or an empty list if the function fails.
+    """
     # Use DNN face detector (more accurate than Haar cascade) if model files exist
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     prototxt_path = os.path.join(script_dir, "models", "deploy.prototxt")
@@ -236,7 +241,7 @@ def crop_to_vertical(input_video_path, output_video_path):
     cap = cv2.VideoCapture(input_video_path, cv2.CAP_FFMPEG)
     if not cap.isOpened():
         print("Error: Could not open video.")
-        return
+        return []
 
     original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -253,7 +258,7 @@ def crop_to_vertical(input_video_path, output_video_path):
 
     if original_width < vertical_width:
         print("Error: Original video width is less than the desired vertical width.")
-        return
+        return []
 
     # ------------------------------------------------------------------
     # PASS 1: Detect faces and build smooth tracking path
@@ -463,6 +468,9 @@ def crop_to_vertical(input_video_path, output_video_path):
     cap.release()
     _finish_nvenc_writer(writer, "cropped video encode")
     print(f"Cropping complete. Processed {frame_count} frames -> {output_video_path}")
+
+    # Return camera effects as (type, start_sec, end_sec) for SFX integration
+    return [(etype, es / fps, ee / fps) for etype, es, ee, _ in effects]
 
 
 def _get_video_duration(video_path):

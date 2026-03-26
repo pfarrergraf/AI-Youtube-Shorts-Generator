@@ -1,5 +1,4 @@
 import os
-import shlex
 import subprocess
 from typing import Any
 
@@ -56,17 +55,17 @@ EVENT_TO_SFX = {
 }
 
 SFX_BEHAVIOR = {
-    "pop": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 80},
-    "click": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 60},
-    "whoosh_soft": {"offset_ms": -40, "fade_in_ms": 5, "fade_out_ms": 120},
-    "whoosh_strong": {"offset_ms": -60, "fade_in_ms": 5, "fade_out_ms": 140},
-    "whoosh_heavy": {"offset_ms": -120, "fade_in_ms": 5, "fade_out_ms": 200},
-    "whoosh_transition": {"offset_ms": -300, "fade_in_ms": 5, "fade_out_ms": 180},
-    "vacuum_turn": {"offset_ms": -30, "fade_in_ms": 5, "fade_out_ms": 120},
-    "vacuum_transition": {"offset_ms": -80, "fade_in_ms": 5, "fade_out_ms": 160},
-    "impact_soft": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 180},
-    "impact_strong": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 220},
-    "punch": {"offset_ms": -10, "fade_in_ms": 0, "fade_out_ms": 120},
+    "pop": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 80, "trim_ms": 220},
+    "click": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 60, "trim_ms": 180},
+    "whoosh_soft": {"offset_ms": -40, "fade_in_ms": 5, "fade_out_ms": 120, "trim_ms": 550},
+    "whoosh_strong": {"offset_ms": -60, "fade_in_ms": 5, "fade_out_ms": 140, "trim_ms": 800},
+    "whoosh_heavy": {"offset_ms": -120, "fade_in_ms": 5, "fade_out_ms": 220, "trim_ms": 1100},
+    "whoosh_transition": {"offset_ms": -300, "fade_in_ms": 5, "fade_out_ms": 180, "trim_ms": 1200},
+    "vacuum_turn": {"offset_ms": -30, "fade_in_ms": 5, "fade_out_ms": 120, "trim_ms": 500},
+    "vacuum_transition": {"offset_ms": -80, "fade_in_ms": 5, "fade_out_ms": 180, "trim_ms": 900},
+    "impact_soft": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 180, "trim_ms": 700},
+    "impact_strong": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 220, "trim_ms": 1000},
+    "punch": {"offset_ms": -10, "fade_in_ms": 0, "fade_out_ms": 120, "trim_ms": 400},
 }
 
 SFX_GAIN = {
@@ -192,10 +191,6 @@ def resolve_sfx_path(event_name: str, sfx_dir: str | None) -> str | None:
     return None
 
 
-def _clamp_nonnegative_ms(value_ms: int) -> int:
-    return max(0, int(value_ms))
-
-
 def _get_profile_config(profile: str) -> dict[str, Any]:
     return SFX_PROFILE_OVERRIDES.get(profile, SFX_PROFILE_OVERRIDES["social"])
 
@@ -216,7 +211,7 @@ def _get_behavior(event_name: str) -> dict[str, int]:
     sfx_type = EVENT_TO_SFX[event_name]
     return SFX_BEHAVIOR.get(
         sfx_type,
-        {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 80},
+        {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 80, "trim_ms": 500},
     )
 
 
@@ -300,6 +295,7 @@ def build_sfx_events(
                 "gain_db": _get_effective_gain_db(event_name, profile),
                 "fade_in_ms": int(behavior.get("fade_in_ms", 0)),
                 "fade_out_ms": int(behavior.get("fade_out_ms", 80)),
+                "trim_ms": int(behavior.get("trim_ms", 500)),
                 "meta": item.get("meta", {}),
             }
         )
@@ -319,16 +315,25 @@ def _build_single_sfx_filter(
     gain_db: float,
     fade_in_ms: int,
     fade_out_ms: int,
+    trim_ms: int = 500,
 ) -> str:
     """
     Builds a filter chain for one SFX input.
     """
-    start_sec = start_ms / 1000.0
+    trim_sec = max(0.05, trim_ms / 1000.0)
     fade_in_sec = max(0.0, fade_in_ms / 1000.0)
     fade_out_sec = max(0.0, fade_out_ms / 1000.0)
 
+    # fade-out must not exceed the trimmed duration
+    if fade_out_sec >= trim_sec:
+        fade_out_sec = max(0.02, trim_sec * 0.35)
+
+    fade_out_start_sec = max(0.0, trim_sec - fade_out_sec)
+
     parts = [
         f"[{input_index}:a]aresample=48000",
+        f"atrim=0:{_format_seconds(trim_sec)}",
+        "asetpts=PTS-STARTPTS",
         f"volume={gain_db}dB",
     ]
 
@@ -336,7 +341,9 @@ def _build_single_sfx_filter(
         parts.append(f"afade=t=in:st=0:d={_format_seconds(fade_in_sec)}")
 
     if fade_out_sec > 0:
-        parts.append(f"afade=t=out:st=0:d={_format_seconds(fade_out_sec)}")
+        parts.append(
+            f"afade=t=out:st={_format_seconds(fade_out_start_sec)}:d={_format_seconds(fade_out_sec)}"
+        )
 
     parts.append(f"adelay={start_ms}|{start_ms}")
 
@@ -346,6 +353,11 @@ def _build_single_sfx_filter(
 def _build_filter_complex_for_sfx(
     sfx_events: list[dict[str, Any]],
     speech_input_index: int = 1,
+    duck_sfx_under_speech: bool = True,
+    duck_threshold: float = 0.035,
+    duck_ratio: float = 8.0,
+    duck_attack_ms: int = 15,
+    duck_release_ms: int = 180,
 ) -> tuple[str, str]:
     """
     Returns (filter_complex, final_audio_label).
@@ -354,8 +366,12 @@ def _build_filter_complex_for_sfx(
     Inputs 2..N = sfx files
     """
     filter_parts: list[str] = []
-    mix_inputs = [f"[{speech_input_index}:a]"]
 
+    # Resample speech for consistent mixing
+    speech_label = "[speech]"
+    filter_parts.append(f"[{speech_input_index}:a]aresample=48000{speech_label}")
+
+    mix_inputs: list[str] = []
     for idx, event in enumerate(sfx_events):
         input_index = 2 + idx
         label = f"[sfx{idx}]"
@@ -367,18 +383,51 @@ def _build_filter_complex_for_sfx(
                 gain_db=float(event["gain_db"]),
                 fade_in_ms=int(event["fade_in_ms"]),
                 fade_out_ms=int(event["fade_out_ms"]),
+                trim_ms=int(event.get("trim_ms", 500)),
             )
         )
         mix_inputs.append(label)
 
+    # Mix all SFX into a single bus
+    if mix_inputs:
+        sfx_bus_label = "[sfxbus]"
+        filter_parts.append(
+            "".join(mix_inputs)
+            + f"amix=inputs={len(mix_inputs)}:normalize=0:dropout_transition=0"
+            + sfx_bus_label
+        )
+    else:
+        sfx_bus_label = "[sfxbus]"
+        filter_parts.append(
+            "anullsrc=r=48000:cl=stereo,atrim=0:0.05,asetpts=PTS-STARTPTS"
+            + sfx_bus_label
+        )
+
     final_label = "[aout]"
-    amix = (
-        "".join(mix_inputs)
-        + f"amix=inputs={len(mix_inputs)}:normalize=0:dropout_transition=0,"
-          "alimiter=limit=0.95"
-        + final_label
-    )
-    filter_parts.append(amix)
+
+    if duck_sfx_under_speech:
+        # Duck the SFX bus using speech as sidechain
+        ducked_label = "[sfxduck]"
+        filter_parts.append(
+            f"{sfx_bus_label}{speech_label}sidechaincompress="
+            f"threshold={duck_threshold}:ratio={duck_ratio}:"
+            f"attack={duck_attack_ms}:release={duck_release_ms}"
+            f"{ducked_label}"
+        )
+        # Re-read speech for final mix (sidechaincompress consumed it)
+        speech_label2 = "[speech2]"
+        filter_parts.append(
+            f"[{speech_input_index}:a]aresample=48000{speech_label2}"
+        )
+        filter_parts.append(
+            f"{speech_label2}{ducked_label}amix=inputs=2:normalize=0:dropout_transition=0,"
+            f"alimiter=limit=0.95{final_label}"
+        )
+    else:
+        filter_parts.append(
+            f"{speech_label}{sfx_bus_label}amix=inputs=2:normalize=0:dropout_transition=0,"
+            f"alimiter=limit=0.95{final_label}"
+        )
 
     return ";".join(filter_parts), final_label
 
@@ -392,6 +441,11 @@ def mix_sfx_with_audio_ffmpeg(
     profile: str = "social",
     video_codec_flags: list[str] | None = None,
     keep_video_copy: bool = True,
+    duck_sfx_under_speech: bool = True,
+    duck_threshold: float = 0.035,
+    duck_ratio: float = 8.0,
+    duck_attack_ms: int = 15,
+    duck_release_ms: int = 180,
 ) -> str:
     """
     Mix SFX onto an existing video + audio pair.
@@ -464,8 +518,13 @@ def mix_sfx_with_audio_ffmpeg(
         command += ["-i", event["sfx_path"]]
 
     filter_complex, audio_label = _build_filter_complex_for_sfx(
-        sfx_events,
+        sfx_events=sfx_events,
         speech_input_index=1,
+        duck_sfx_under_speech=duck_sfx_under_speech,
+        duck_threshold=duck_threshold,
+        duck_ratio=duck_ratio,
+        duck_attack_ms=duck_attack_ms,
+        duck_release_ms=duck_release_ms,
     )
 
     command += [
@@ -515,6 +574,7 @@ def debug_print_sfx_events(
             f"time={event['time_sec']:.3f}s  "
             f"start_ms={event['start_ms']}  "
             f"type={event['sfx_type']}  "
+            f"trim_ms={event['trim_ms']}  "
             f"gain={event['gain_db']}dB  "
             f"file={os.path.basename(event['sfx_path'])}"
         )
