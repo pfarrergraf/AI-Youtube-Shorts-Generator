@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -6,7 +7,6 @@ import tempfile
 import cv2
 
 
-MAX_WORDS_PER_CAPTION = 4
 MAX_LINES_PER_CAPTION = 2
 
 # TikTok-style colour palette (ASS uses &HAABBGGRR)
@@ -18,6 +18,19 @@ INACTIVE_COLOUR = "&H00FFFFFF"   # white   (#FFFFFF)
 OUTLINE_COLOUR = "&H00000000"    # black
 # Box background:         semi-transparent dark
 BOX_COLOUR = "&H96000000"        # ~60% opaque black
+
+# Phrase segmentation defaults
+HARD_PUNCT = {".", "?", "!"}
+SOFT_PUNCT = {",", ";", ":"}
+MIN_WORDS_BEFORE_SOFT_BREAK = 4
+MIN_PHRASE_DURATION = 1.0
+MAX_PHRASE_DURATION = 4.5
+MAX_PHRASE_WORDS = 10
+HOLD_AFTER_PHRASE_SEC = 0.4
+
+# Stable wrapping defaults
+TARGET_CHARS_PER_LINE = 18
+MAX_CHARS_PER_LINE = 26
 
 NVENC_FLAGS = [
     "-c:v",
@@ -63,7 +76,119 @@ def _escape_ass_text(text):
     )
 
 
+# ---------------------------------------------------------------------------
+#  Phrase segmentation — group words into meaningful speech units
+# ---------------------------------------------------------------------------
+
+def _ends_with_hard_punct(word):
+    """Check if the last character of *word* is a hard break punctuation."""
+    stripped = word.rstrip()
+    return bool(stripped) and stripped[-1] in HARD_PUNCT
+
+
+def _ends_with_soft_punct(word):
+    """Check if the last character of *word* is a soft break punctuation."""
+    stripped = word.rstrip()
+    return bool(stripped) and stripped[-1] in SOFT_PUNCT
+
+
+def segment_words_into_phrases(words):
+    """Group timestamped word dicts into semantic phrase blocks.
+
+    Each input word is ``{"text": str, "start": float, "end": float}``.
+    Returns a list of phrases, where each phrase is a list of word dicts.
+
+    Break rules:
+    - Hard break after ``.``, ``?``, ``!`` — always starts a new phrase.
+    - Soft break after ``,``, ``;``, ``:`` — only if the phrase already has
+      at least *MIN_WORDS_BEFORE_SOFT_BREAK* words **and** at least
+      *MIN_PHRASE_DURATION* seconds.
+    - Force-break if phrase exceeds *MAX_PHRASE_WORDS* or *MAX_PHRASE_DURATION*.
+    """
+    if not words:
+        return []
+
+    phrases = []
+    current = []
+
+    for w in words:
+        current.append(w)
+        phrase_dur = current[-1]["end"] - current[0]["start"]
+        n = len(current)
+
+        # Force-break: phrase too long
+        if n >= MAX_PHRASE_WORDS or phrase_dur >= MAX_PHRASE_DURATION:
+            phrases.append(current)
+            current = []
+            continue
+
+        # Hard break: sentence-ending punctuation
+        if _ends_with_hard_punct(w["text"]):
+            phrases.append(current)
+            current = []
+            continue
+
+        # Soft break: clause punctuation, only if phrase is substantial enough
+        if _ends_with_soft_punct(w["text"]):
+            if n >= MIN_WORDS_BEFORE_SOFT_BREAK and phrase_dur >= MIN_PHRASE_DURATION:
+                phrases.append(current)
+                current = []
+                continue
+
+    if current:
+        phrases.append(current)
+
+    return phrases
+
+
+# ---------------------------------------------------------------------------
+#  Stable text wrapping — balanced 2-line layout
+# ---------------------------------------------------------------------------
+
+def wrap_phrase_text(phrase_words):
+    """Wrap a list of plain-text words into at most 2 balanced lines.
+
+    Returns a string with ``\\n`` separating lines.  Tries to keep line
+    widths roughly equal and within *TARGET_CHARS_PER_LINE* /
+    *MAX_CHARS_PER_LINE* limits.
+    """
+    if not phrase_words:
+        return ""
+
+    text = " ".join(phrase_words)
+
+    # Single line fits
+    if len(text) <= MAX_CHARS_PER_LINE or MAX_LINES_PER_CAPTION == 1:
+        return text
+
+    # Try to split into 2 roughly balanced lines
+    best_split = None
+    best_diff = float("inf")
+    running = 0
+
+    for i, word in enumerate(phrase_words):
+        running += len(word) + (1 if i > 0 else 0)
+        remaining = len(text) - running - 1  # account for the space we remove
+        if remaining < 0:
+            break
+        diff = abs(running - remaining)
+        if diff < best_diff:
+            best_diff = diff
+            best_split = i + 1
+
+    if best_split is None or best_split >= len(phrase_words):
+        return text
+
+    line1 = " ".join(phrase_words[:best_split])
+    line2 = " ".join(phrase_words[best_split:])
+
+    if not line2:
+        return line1
+    return f"{line1}\n{line2}"
+
+
 def _format_caption_lines(words):
+    """Legacy helper kept for backward compat with chunked subtitles."""
     if len(words) <= 3 or MAX_LINES_PER_CAPTION == 1:
         return " ".join(words)
 
@@ -77,6 +202,8 @@ def _format_caption_lines(words):
 
 
 def _chunk_transcriptions(transcriptions):
+    """Legacy fallback: split transcriptions into small caption chunks."""
+    _MAX_CHUNK = 4
     chunked = []
 
     for text, start, end in transcriptions:
@@ -87,11 +214,11 @@ def _chunk_transcriptions(transcriptions):
         total_words = len(words)
         duration = max(0.01, end - start)
 
-        for index in range(0, total_words, MAX_WORDS_PER_CAPTION):
-            chunk_words = words[index:index + MAX_WORDS_PER_CAPTION]
+        for index in range(0, total_words, _MAX_CHUNK):
+            chunk_words = words[index:index + _MAX_CHUNK]
             chunk_start = start + (index / total_words) * duration
             chunk_end = start + (
-                min(index + MAX_WORDS_PER_CAPTION, total_words) / total_words
+                min(index + _MAX_CHUNK, total_words) / total_words
             ) * duration
             chunked.append(
                 [_format_caption_lines(chunk_words), chunk_start, chunk_end]
@@ -144,18 +271,12 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks,
             "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
             "Alignment, MarginL, MarginR, MarginV, Encoding"
         ),
-        # Default style: white bold text, dark box background (BorderStyle=3)
+        # Default style: yellow karaoke fill (PrimaryColour = spoken word),
+        # white unspoken text (SecondaryColour = not yet spoken),
+        # dark box background (BorderStyle=3)
         (
             f"Style: Default,Arial Black,"
-            f"{font_size},{INACTIVE_COLOUR},&H000000FF,"
-            f"{OUTLINE_COLOUR},{BOX_COLOUR},"
-            f"1,0,0,0,100,100,1,0,3,{outline},{shadow},2,"
-            f"{margin_h},{margin_h},{margin_v},1"
-        ),
-        # Karaoke style: same but used for highlighted word override
-        (
-            f"Style: Active,Arial Black,"
-            f"{font_size},{ACTIVE_COLOUR},&H000000FF,"
+            f"{font_size},{ACTIVE_COLOUR},{INACTIVE_COLOUR},"
             f"{OUTLINE_COLOUR},{BOX_COLOUR},"
             f"1,0,0,0,100,100,1,0,3,{outline},{shadow},2,"
             f"{margin_h},{margin_h},{margin_v},1"
@@ -166,58 +287,64 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks,
     ]
 
     if word_events:
-        # TikTok-style: each caption group shown as a block, active word
-        # highlighted.  Each word's Dialogue spans from its start until the
-        # NEXT word begins so that there are never gaps (no flickering).
-        # The last word of a group extends to the next group's start; the
-        # very last word holds for an extra 1.5 s.
-        for g_idx, group in enumerate(word_events):
-            if not group:
+        # Phrase-based karaoke: ONE Dialogue per phrase with \kf tags.
+        # All words are rendered simultaneously; the fill colour sweeps
+        # through them progressively — no text redraws, no layout jitter.
+        for phrase in word_events:
+            if not phrase:
                 continue
-            group_words = [_escape_ass_text(w["text"]) for w in group]
 
-            # Time at which this caption block should disappear: extend to
-            # the start of the next group so captions stay on-screen during
-            # speech pauses with the last word still highlighted.
-            if g_idx + 1 < len(word_events) and word_events[g_idx + 1]:
-                group_visible_end = word_events[g_idx + 1][0]["start"]
-            else:
-                group_visible_end = group[-1]["end"] + 1.5
+            phrase_start = phrase[0]["start"]
+            # Hold phrase on-screen for HOLD_AFTER_PHRASE_SEC past last word
+            phrase_end = phrase[-1]["end"] + HOLD_AFTER_PHRASE_SEC
 
-            for word_idx, w in enumerate(group):
-                # Display from this word's start until the next word begins
-                # (or until the group disappears for the last word).
-                display_start = w["start"]
-                if word_idx + 1 < len(group):
-                    display_end = group[word_idx + 1]["start"]
-                else:
-                    display_end = group_visible_end
+            if phrase_end <= phrase_start:
+                phrase_end = phrase_start + 0.1
 
-                if display_end <= display_start:
-                    display_end = display_start + 0.05
-
-                # Build text line: all words shown, current one in yellow
-                parts = []
-                for j, gw in enumerate(group_words):
-                    if j == word_idx:
-                        parts.append(
-                            r"{\c" + ACTIVE_COLOUR + r"\fscx105\fscy105}" + gw
-                            + r"{\c" + INACTIVE_COLOUR + r"\fscx100\fscy100}"
-                        )
-                    else:
-                        parts.append(gw)
-                caption_text = _format_caption_lines(parts)
-                caption_text = caption_text.replace("\n", r"\N")
-                # Fade-in only on first word of group; no fade-out
-                prefix = r"{\fad(150,0)}" if word_idx == 0 else ""
-                safe = prefix + caption_text
-
-                lines.append(
-                    "Dialogue: 0,"
-                    f"{_seconds_to_ass_time(display_start)},"
-                    f"{_seconds_to_ass_time(display_end)},"
-                    f"Default,,0,0,0,,{safe}"
+            # Build \kf karaoke tag sequence
+            # Format: {\kfDUR}word  where DUR is in centiseconds
+            kf_parts = []
+            for w_idx, w in enumerate(phrase):
+                word_dur_cs = max(1, round((w["end"] - w["start"]) * 100))
+                escaped = _escape_ass_text(w["text"])
+                # Add space before word (except first)
+                space = " " if w_idx > 0 else ""
+                kf_parts.append(
+                    f"{space}{{\\kf{word_dur_cs}}}{escaped}"
                 )
+
+            # Wrap into balanced 2-line layout (using \N for ASS line break)
+            plain_words = [w["text"] for w in phrase]
+            wrapped = wrap_phrase_text(plain_words)
+            # If wrapping produced a line break, insert it into the kf sequence
+            if "\n" in wrapped:
+                split_at = wrapped.index("\n")
+                chars_before_break = len(wrapped[:split_at])
+                # Find the word index where the break goes
+                running_chars = 0
+                break_after_word = 0
+                for wi, pw in enumerate(plain_words):
+                    running_chars += len(pw) + (1 if wi > 0 else 0)
+                    if running_chars >= chars_before_break:
+                        break_after_word = wi
+                        break
+                # Rebuild kf_parts with \N inserted after break_after_word
+                kf_parts_wrapped = []
+                for wi, part in enumerate(kf_parts):
+                    kf_parts_wrapped.append(part)
+                    if wi == break_after_word and wi < len(kf_parts) - 1:
+                        kf_parts_wrapped.append(r"\N")
+                kf_parts = kf_parts_wrapped
+
+            # Fade-in at phrase start
+            karaoke_text = r"{\fad(150,0)}" + "".join(kf_parts)
+
+            lines.append(
+                "Dialogue: 0,"
+                f"{_seconds_to_ass_time(phrase_start)},"
+                f"{_seconds_to_ass_time(phrase_end)},"
+                f"Default,,0,0,0,,{karaoke_text}"
+            )
     else:
         # Legacy fallback: plain chunked subtitles with fade
         for text, start, end in chunks:
@@ -237,10 +364,12 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks,
 
 
 def _build_word_events(word_timestamps, video_start_time, video_duration):
-    """Group word timestamps into caption blocks of MAX_WORDS_PER_CAPTION words.
+    """Build phrase-segmented caption groups from word timestamps.
 
-    Each group is a list of ``{"text", "start", "end"}`` dicts with times
-    already adjusted relative to the clip.
+    Returns a list of phrases, where each phrase is a list of
+    ``{"text", "start", "end"}`` dicts with times adjusted to the clip.
+    Phrases are split at sentence/clause boundaries using
+    ``segment_words_into_phrases()``.
     """
     # Adjust timestamps for clip offset
     adjusted = []
@@ -261,13 +390,7 @@ def _build_word_events(word_timestamps, video_start_time, video_duration):
     if not adjusted:
         return []
 
-    # Group into caption blocks
-    groups = []
-    for i in range(0, len(adjusted), MAX_WORDS_PER_CAPTION):
-        group = adjusted[i:i + MAX_WORDS_PER_CAPTION]
-        if group:
-            groups.append(group)
-    return groups
+    return segment_words_into_phrases(adjusted)
 
 
 def add_subtitles_to_video(input_video, output_video, transcriptions,
@@ -339,8 +462,8 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
         _write_ass_file(subtitle_path, video_width, video_height, chunked,
                         word_events=word_events)
 
-        n_events = sum(len(g) for g in word_events) if word_events else len(chunked)
-        mode = "TikTok karaoke" if word_events else "chunked"
+        n_events = len(word_events) if word_events else len(chunked)
+        mode = "phrase karaoke" if word_events else "chunked"
         print(
             f"Adding {n_events} subtitle events ({mode}) to video with FFmpeg NVENC..."
         )
