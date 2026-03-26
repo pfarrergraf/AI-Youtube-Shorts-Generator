@@ -797,45 +797,48 @@ def GetJumpCuts(transcription_text, start, end):
 # ── Title-card hook generation ───────────────────────────────────
 
 TITLE_HOOK_PROMPT = """\
-You write short title text for social media sermon/talk clips.  This text appears as a title card for 2–3 seconds before the clip starts.
+You write short, bold title text for social media sermon/talk clips.  The text appears over the speaker's face as a scroll-stopping thumbnail overlay.
 
 You receive:
 - The actual TRANSCRIPT of the clip (the literal spoken words).
 - A content summary.
 - The video title.
 
-Your job: Write a MESSAGE TITLE — 3-8 words, max 50 characters — that captures the CORE MESSAGE the speaker is communicating.
+Your job: Return TWO lines, nothing else.
+Line 1: HOOK — 2-5 words, max 30 characters.  This is the large bold text.
+Line 2: KEYWORD — the single most powerful word from the hook that should be color-accented.
 
-CRITICAL RULES:
-- The title MUST include at least one key word or phrase DIRECTLY from the transcript.
-- Communicate the core message or insight — do NOT tease or ask vague questions.
-- Think of it as a sermon headline that summarizes what the speaker says.
+The hook MUST be extremely short and punchy — think YouTube thumbnail / TikTok cover text.
+It must include at least one word DIRECTLY from the transcript.
+
+Rules:
+- 2-5 words MAXIMUM. Shorter is better.  Think "BROKEN HEART", "WHY DO WE PRAY?", "FASTING", "GOD'S DNA".
+- ALL CAPS is fine and encouraged for punch.
+- Communicate the core message or provoke curiosity in the fewest words possible.
 - German if the transcript is German, English if English.
-- Use natural, spoken-style language — not academic or formal.
-- NO rhetorical questions starting with "Was wäre wenn" — state the message instead.
-- NO hashtags, emojis, or clickbait phrases ("UNGLAUBLICH", "DAS MUSST DU SEHEN").
-- If the speaker makes a bold statement, USE their words as the title.
-- If the speaker tells a story, title it after the lesson or turning point.
+- NO hashtags, emojis, or clickbait filler ("UNGLAUBLICH", "DAS MUSST DU SEHEN").
+- The keyword on line 2 must be ONE word from the hook that carries the most weight.
 
-GOOD examples (each uses words FROM the transcript):
-- "Gott gibt dir mehr als genug"
-- "Drei Mal schlagen — nicht aufhören"
-- "Joas hätte weiterschlagen sollen"
-- "Das Wort Gottes verändert alles"
-- "Gnade ist kein Verdienst"
+GOOD examples:
+DREI MAL SCHLAGEN
+SCHLAGEN
 
-BAD examples:
-- "Was wäre, wenn...?" (too vague, no message, not from transcript)
-- "Dieser Moment hat alles verändert" (generic, not from transcript)
-- "Du wirst nicht glauben was passiert" (clickbait)
-- "Was wäre, wenn dein Bruder das Wichtigste war?" (question, not a message)
+GOTTES PLAN
+GOTTES
 
-Return ONLY the title text — no quotes, no explanation, no JSON."""
+GNADE REICHT
+GNADE
+
+NICHT AUFHÖREN
+AUFHÖREN
+
+Return EXACTLY two lines. No quotes, no explanation, no JSON."""
 
 
 def GenerateTitleHook(clip_content, clip_transcript="", video_title="", language="de"):
-    """Ask the LLM to generate a message-based title for a title card.
+    """Ask the LLM to generate a short thumbnail hook + accent keyword.
 
+    Returns ``(hook_text, accent_keyword)`` tuple.
     *clip_transcript* is the actual spoken text of the clip segment.
     Falls back to a truncated *clip_content* if the LLM call fails.
     """
@@ -851,19 +854,26 @@ def GenerateTitleHook(clip_content, clip_transcript="", video_title="", language
     user_msg = "\n\n".join(parts)
 
     try:
-        hook = _call_llm(TITLE_HOOK_PROMPT, user_msg, temperature=0.7)
-        # Strip any stray quotes the LLM might add
-        hook = hook.strip().strip('"').strip("'").strip('\u201c').strip('\u201d')
-        if len(hook) > 60:
-            hook = hook[:57] + "\u2026"
+        raw = _call_llm(TITLE_HOOK_PROMPT, user_msg, temperature=0.7)
+        lines = [l.strip().strip('"').strip("'").strip('\u201c').strip('\u201d')
+                 for l in raw.strip().splitlines() if l.strip()]
+        hook = lines[0] if lines else ""
+        keyword = lines[1] if len(lines) > 1 else ""
+        if len(hook) > 40:
+            hook = hook[:37] + "\u2026"
         if hook:
-            return hook
+            # Validate keyword is actually in the hook
+            if keyword.upper() not in hook.upper():
+                # Pick the longest word as accent
+                keyword = max(hook.split(), key=len) if hook.split() else ""
+            return hook, keyword
     except Exception as exc:
         print(f"[TitleHook] LLM call failed ({exc}); using fallback.")
 
-    # Fallback: first 50 chars of clip_content
-    fallback = clip_content[:50].rsplit(" ", 1)[0] if len(clip_content) > 50 else clip_content
-    return fallback
+    # Fallback: first 30 chars of clip_content
+    fallback = clip_content[:30].rsplit(" ", 1)[0] if len(clip_content) > 30 else clip_content
+    kw = max(fallback.split(), key=len) if fallback.split() else ""
+    return fallback, kw
 
 
 if __name__ == "__main__":
