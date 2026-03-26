@@ -9,6 +9,16 @@ import cv2
 MAX_WORDS_PER_CAPTION = 4
 MAX_LINES_PER_CAPTION = 2
 
+# TikTok-style colour palette (ASS uses &HAABBGGRR)
+# Primary (active word):  bright yellow
+ACTIVE_COLOUR = "&H0000FFFF"     # yellow  (#FFFF00)
+# Inactive words:         pure white
+INACTIVE_COLOUR = "&H00FFFFFF"   # white   (#FFFFFF)
+# Outline:                dark shadow
+OUTLINE_COLOUR = "&H00000000"    # black
+# Box background:         semi-transparent dark
+BOX_COLOUR = "&H96000000"        # ~60% opaque black
+
 NVENC_FLAGS = [
     "-c:v",
     "h264_nvenc",
@@ -105,11 +115,19 @@ def _read_video_metadata(video_path):
     return width, height, duration
 
 
-def _write_ass_file(subtitle_path, video_width, video_height, chunks):
-    font_size = max(28, int(video_height * 0.038))
-    margin_v = max(80, int(video_height * 0.12))
-    margin_h = max(50, int(video_width * 0.10))
-    outline = max(2, int(video_height * 0.003))
+def _write_ass_file(subtitle_path, video_width, video_height, chunks,
+                    word_events=None):
+    """Write an ASS subtitle file.
+
+    If *word_events* is provided (list of caption groups, each group being a
+    list of ``{"text", "start", "end"}`` dicts), generate TikTok-style
+    word-by-word karaoke.  Otherwise fall back to the legacy chunk approach.
+    """
+    font_size = max(36, int(video_height * 0.055))
+    margin_v = max(100, int(video_height * 0.14))
+    margin_h = max(40, int(video_width * 0.08))
+    outline = max(3, int(video_height * 0.004))
+    shadow = max(2, int(video_height * 0.002))
 
     lines = [
         "[Script Info]",
@@ -126,32 +144,134 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks):
             "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
             "Alignment, MarginL, MarginR, MarginV, Encoding"
         ),
+        # Default style: white bold text, dark box background (BorderStyle=3)
         (
-            "Style: Default,Arial,"
-            f"{font_size},&H00FFFFFF,&H000000FF,&H00000000,&H64000000,"
-            f"1,0,0,0,100,100,0,0,1,{outline},0,2,{margin_h},{margin_h},{margin_v},1"
+            f"Style: Default,Arial Black,"
+            f"{font_size},{INACTIVE_COLOUR},&H000000FF,"
+            f"{OUTLINE_COLOUR},{BOX_COLOUR},"
+            f"1,0,0,0,100,100,1,0,3,{outline},{shadow},2,"
+            f"{margin_h},{margin_h},{margin_v},1"
+        ),
+        # Karaoke style: same but used for highlighted word override
+        (
+            f"Style: Active,Arial Black,"
+            f"{font_size},{ACTIVE_COLOUR},&H000000FF,"
+            f"{OUTLINE_COLOUR},{BOX_COLOUR},"
+            f"1,0,0,0,100,100,1,0,3,{outline},{shadow},2,"
+            f"{margin_h},{margin_h},{margin_v},1"
         ),
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
 
-    for text, start, end in chunks:
-        safe_text = _escape_ass_text(text.strip())
-        if not safe_text:
-            continue
-        lines.append(
-            "Dialogue: 0,"
-            f"{_seconds_to_ass_time(start)},"
-            f"{_seconds_to_ass_time(end)},"
-            f"Default,,0,0,0,,{safe_text}"
-        )
+    if word_events:
+        # TikTok-style: each caption group shown as a block, active word
+        # highlighted.  Each word's Dialogue spans from its start until the
+        # NEXT word begins so that there are never gaps (no flickering).
+        # The last word of a group extends to the next group's start; the
+        # very last word holds for an extra 1.5 s.
+        for g_idx, group in enumerate(word_events):
+            if not group:
+                continue
+            group_words = [_escape_ass_text(w["text"]) for w in group]
+
+            # Time at which this caption block should disappear: extend to
+            # the start of the next group so captions stay on-screen during
+            # speech pauses with the last word still highlighted.
+            if g_idx + 1 < len(word_events) and word_events[g_idx + 1]:
+                group_visible_end = word_events[g_idx + 1][0]["start"]
+            else:
+                group_visible_end = group[-1]["end"] + 1.5
+
+            for word_idx, w in enumerate(group):
+                # Display from this word's start until the next word begins
+                # (or until the group disappears for the last word).
+                display_start = w["start"]
+                if word_idx + 1 < len(group):
+                    display_end = group[word_idx + 1]["start"]
+                else:
+                    display_end = group_visible_end
+
+                if display_end <= display_start:
+                    display_end = display_start + 0.05
+
+                # Build text line: all words shown, current one in yellow
+                parts = []
+                for j, gw in enumerate(group_words):
+                    if j == word_idx:
+                        parts.append(
+                            r"{\c" + ACTIVE_COLOUR + r"\fscx105\fscy105}" + gw
+                            + r"{\c" + INACTIVE_COLOUR + r"\fscx100\fscy100}"
+                        )
+                    else:
+                        parts.append(gw)
+                caption_text = _format_caption_lines(parts)
+                caption_text = caption_text.replace("\n", r"\N")
+                # Fade-in only on first word of group; no fade-out
+                prefix = r"{\fad(150,0)}" if word_idx == 0 else ""
+                safe = prefix + caption_text
+
+                lines.append(
+                    "Dialogue: 0,"
+                    f"{_seconds_to_ass_time(display_start)},"
+                    f"{_seconds_to_ass_time(display_end)},"
+                    f"Default,,0,0,0,,{safe}"
+                )
+    else:
+        # Legacy fallback: plain chunked subtitles with fade
+        for text, start, end in chunks:
+            safe_text = _escape_ass_text(text.strip())
+            if not safe_text:
+                continue
+            fade = r"{\fad(150,80)}"
+            lines.append(
+                "Dialogue: 0,"
+                f"{_seconds_to_ass_time(start)},"
+                f"{_seconds_to_ass_time(end)},"
+                f"Default,,0,0,0,,{fade}{safe_text}"
+            )
 
     with open(subtitle_path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
 
 
-def add_subtitles_to_video(input_video, output_video, transcriptions, video_start_time=0):
+def _build_word_events(word_timestamps, video_start_time, video_duration):
+    """Group word timestamps into caption blocks of MAX_WORDS_PER_CAPTION words.
+
+    Each group is a list of ``{"text", "start", "end"}`` dicts with times
+    already adjusted relative to the clip.
+    """
+    # Adjust timestamps for clip offset
+    adjusted = []
+    for w in word_timestamps:
+        start = w["start"] - video_start_time
+        end = w["end"] - video_start_time
+        if end <= 0:
+            continue
+        if video_duration > 0 and start >= video_duration:
+            continue
+        start = max(0, start)
+        if video_duration > 0:
+            end = min(video_duration, end)
+        text = w["text"].strip()
+        if text and not text.startswith("["):
+            adjusted.append({"text": text, "start": start, "end": end})
+
+    if not adjusted:
+        return []
+
+    # Group into caption blocks
+    groups = []
+    for i in range(0, len(adjusted), MAX_WORDS_PER_CAPTION):
+        group = adjusted[i:i + MAX_WORDS_PER_CAPTION]
+        if group:
+            groups.append(group)
+    return groups
+
+
+def add_subtitles_to_video(input_video, output_video, transcriptions,
+                           video_start_time=0, word_timestamps=None):
     """
     Add subtitles to video based on transcription segments.
 
@@ -160,11 +280,18 @@ def add_subtitles_to_video(input_video, output_video, transcriptions, video_star
         output_video: Path to output video file
         transcriptions: List of [text, start, end] from transcribeAudio
         video_start_time: Start time offset if video was cropped
+        word_timestamps: Optional list of {"text", "start", "end"} dicts for
+            TikTok-style word-by-word highlighting
     """
     input_video = os.path.abspath(input_video)
     output_video = os.path.abspath(output_video)
 
     video_width, video_height, video_duration = _read_video_metadata(input_video)
+
+    # Build word-level karaoke events if real word timestamps are available
+    word_events = None
+    if word_timestamps:
+        word_events = _build_word_events(word_timestamps, video_start_time, video_duration)
 
     relevant_transcriptions = []
     for text, start, end in transcriptions:
@@ -184,13 +311,13 @@ def add_subtitles_to_video(input_video, output_video, transcriptions, video_star
         if stripped_text and not stripped_text.startswith("["):
             relevant_transcriptions.append([stripped_text, adjusted_start, adjusted_end])
 
-    if not relevant_transcriptions:
+    if not relevant_transcriptions and not word_events:
         print("No transcriptions found for this video segment")
         shutil.copyfile(input_video, output_video)
         return
 
-    chunked = _chunk_transcriptions(relevant_transcriptions)
-    if not chunked:
+    chunked = _chunk_transcriptions(relevant_transcriptions) if relevant_transcriptions else []
+    if not chunked and not word_events:
         print("No subtitle chunks generated for this video segment")
         shutil.copyfile(input_video, output_video)
         return
@@ -209,10 +336,13 @@ def add_subtitles_to_video(input_video, output_video, transcriptions, video_star
         ) as handle:
             subtitle_path = handle.name
 
-        _write_ass_file(subtitle_path, video_width, video_height, chunked)
+        _write_ass_file(subtitle_path, video_width, video_height, chunked,
+                        word_events=word_events)
 
+        n_events = sum(len(g) for g in word_events) if word_events else len(chunked)
+        mode = "TikTok karaoke" if word_events else "chunked"
         print(
-            f"Adding {len(chunked)} subtitle segments to video with FFmpeg NVENC..."
+            f"Adding {n_events} subtitle events ({mode}) to video with FFmpeg NVENC..."
         )
         command = [
             "ffmpeg",
