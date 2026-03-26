@@ -412,11 +412,20 @@ def _call_llm(system_prompt, user_content, temperature=0.7, _retries=3):
             if is_model_error or is_conn_error:
                 global _llm_server_ready
                 _llm_server_ready = False  # force re-check
-                wait = 10 * attempt
-                print(f"  [LLM] Attempt {attempt}/{_retries} failed: {e}")
-                print(f"  [LLM] Re-checking local LLM server in {wait}s...")
-                time.sleep(wait)
-                _ensure_llm_server()
+                # For vLLM: no auto-start possible, fail fast
+                if _llm_backend_mode() != "lmstudio":
+                    print(f"  [LLM] Attempt {attempt}/{_retries} failed: {e}")
+                    if not _llm_server_reachable():
+                        print(f"  [LLM] vLLM server not reachable — skipping remaining retries.")
+                        break
+                    # Server reachable but request failed — short retry
+                    time.sleep(2)
+                else:
+                    wait = 10 * attempt
+                    print(f"  [LLM] Attempt {attempt}/{_retries} failed: {e}")
+                    print(f"  [LLM] Re-checking local LLM server in {wait}s...")
+                    time.sleep(wait)
+                    _ensure_llm_server()
             else:
                 raise  # non-recoverable error, don't retry
 
