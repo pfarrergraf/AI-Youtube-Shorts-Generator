@@ -24,6 +24,7 @@ MAX_PHRASE_DURATION = 2
 MAX_PHRASE_WORDS = MAX_WORDS_PER_PHRASE
 MIN_PHRASE_WORDS = 1
 HOLD_AFTER_PHRASE_SEC = 0.1
+MIN_WORD_DISPLAY_SEC = 0.25   # minimum time each word stays highlighted
 
 # Stable wrapping defaults
 TARGET_CHARS_PER_LINE = 16
@@ -390,17 +391,19 @@ def _normalise_phrase_timings(word_events):
             ws = max(w["start"], cursor)
 
             if j + 1 < n:
-                # Mid-phrase: extend seamlessly to next word's start
-                we = max(ws + 0.04, phrase[j + 1]["start"])
+                # Mid-phrase: extend seamlessly to next word's start,
+                # but ensure each word is visible for at least
+                # MIN_WORD_DISPLAY_SEC (important for fast speakers).
+                we = max(ws + MIN_WORD_DISPLAY_SEC, phrase[j + 1]["start"])
             elif i + 1 < total and word_events[i + 1]:
                 # Last word of phrase: hold, but never overlap next phrase
                 natural = w["end"] + HOLD_AFTER_PHRASE_SEC
                 next_start = word_events[i + 1][0]["start"]
                 we = min(natural, next_start)
-                we = max(we, ws + 0.04)
+                we = max(we, ws + MIN_WORD_DISPLAY_SEC)
             else:
                 # Very last word overall
-                we = max(ws + 0.04, w["end"] + HOLD_AFTER_PHRASE_SEC)
+                we = max(ws + MIN_WORD_DISPLAY_SEC, w["end"] + HOLD_AFTER_PHRASE_SEC)
 
             copied.append({"text": w["text"], "start": ws, "end": we})
             cursor = we
