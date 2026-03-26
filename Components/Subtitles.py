@@ -19,12 +19,12 @@ BOX_COLOUR = "&HCC000000"         # 80% transparent black box
 HARD_PUNCT = {".", "?", "!"}
 SOFT_PUNCT = {",", ";", ":"}
 MIN_WORDS_BEFORE_SOFT_BREAK = 4
-MIN_PHRASE_DURATION = 0.4
-MAX_PHRASE_DURATION = 2
+MIN_PHRASE_DURATION = 0.10
+MAX_PHRASE_DURATION = 1.0
 MAX_PHRASE_WORDS = MAX_WORDS_PER_PHRASE
 MIN_PHRASE_WORDS = 1
-HOLD_AFTER_PHRASE_SEC = 0.1
-MIN_WORD_DISPLAY_SEC = 0.04   # minimum time each word stays highlighted
+HOLD_AFTER_PHRASE_SEC = 0.03
+MIN_WORD_DISPLAY_SEC = 0.02   # minimum time each word stays highlighted
 
 # Stable wrapping defaults
 TARGET_CHARS_PER_LINE = 16
