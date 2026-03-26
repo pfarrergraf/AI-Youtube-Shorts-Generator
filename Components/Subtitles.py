@@ -24,7 +24,7 @@ MAX_PHRASE_DURATION = 2
 MAX_PHRASE_WORDS = MAX_WORDS_PER_PHRASE
 MIN_PHRASE_WORDS = 1
 HOLD_AFTER_PHRASE_SEC = 0.1
-MIN_WORD_DISPLAY_SEC = 0.25   # minimum time each word stays highlighted
+MIN_WORD_DISPLAY_SEC = 0.04   # minimum time each word stays highlighted
 
 # Stable wrapping defaults
 TARGET_CHARS_PER_LINE = 16
@@ -391,9 +391,7 @@ def _normalise_phrase_timings(word_events):
             ws = max(w["start"], cursor)
 
             if j + 1 < n:
-                # Mid-phrase: extend seamlessly to next word's start,
-                # but ensure each word is visible for at least
-                # MIN_WORD_DISPLAY_SEC (important for fast speakers).
+                # Mid-phrase: extend seamlessly to next word's start.
                 we = max(ws + MIN_WORD_DISPLAY_SEC, phrase[j + 1]["start"])
             elif i + 1 < total and word_events[i + 1]:
                 # Last word of phrase: hold, but never overlap next phrase
@@ -495,12 +493,13 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
 
 def _build_word_events(word_timestamps, video_start_time, video_duration):
     adjusted = []
+    dropped = 0
     for w in word_timestamps:
         start = w["start"] - video_start_time
         end = w["end"] - video_start_time
         if end <= 0:
             continue
-        if video_duration > 0 and start >= video_duration:
+        if video_duration > 0 and start > video_duration:
             continue
 
         start = max(0, start)
@@ -510,6 +509,19 @@ def _build_word_events(word_timestamps, video_start_time, video_duration):
         text = (w["text"] or "").strip()
         if text and not text.startswith("["):
             adjusted.append({"text": text, "start": start, "end": end})
+        elif text:
+            dropped += 1
+
+    if dropped:
+        print(f"[Subtitles] Dropped {dropped} marker words (e.g. [AUDIENCE REACTION])")
+
+    total_in_range = len(adjusted) + dropped
+    total_input = len(word_timestamps)
+    if total_in_range < total_input:
+        print(f"[Subtitles] {total_input} input words → {len(adjusted)} in clip range "
+              f"(filtered {total_input - total_in_range} outside clip boundaries)")
+    else:
+        print(f"[Subtitles] All {len(adjusted)} words in clip range")
 
     if not adjusted:
         return []
