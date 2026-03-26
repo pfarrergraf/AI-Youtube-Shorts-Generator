@@ -221,7 +221,7 @@ CRITICAL RULES:
 - **Never start mid-story**: If the joke is about "my father at the airport", start where the speaker first mentions the airport, NOT halfway through.
 - **Never cut during reactions**: Your end MUST be >= the END timestamp of the last [AUDIENCE REACTION].
 - **Stop before new content**: Do NOT include the beginning of the NEXT topic.
-- **Duration**: 30-120 seconds. Too long is better than too short.
+- **Duration**: 30-180 seconds. Too long is better than too short.
 - **Complete sentences only**: Never start or end mid-sentence.
 
 Return ONLY a JSON object (no markdown fences):
@@ -255,7 +255,7 @@ CRITICAL RULES:
 - **No overlaps.** Clips must not overlap in time.
 - **Complete** means: setup + build-up + punchline + audience reaction. Missing the setup = unusable clip.
 - **Stop before new content**: Do NOT include the start of the next topic.
-- **Duration**: 30-120s each. Too long is far better than too short.
+- **Duration**: 30-180s each. Too long is far better than too short.
 - **Complete sentences only**: never start or end mid-sentence.
 - **Quality bar**: Only genuinely engaging moments. Skip flat/boring passages.
 
@@ -604,7 +604,7 @@ def GetAllHighlights(Transcription):
                     e = float(item["end"])
                 except (KeyError, ValueError, TypeError):
                     continue
-                if e > s and (e - s) >= 25:
+                if e > s and (e - s) >= 20:
                     all_highlights.append({
                         "start": s,
                         "end": e,
