@@ -308,6 +308,20 @@ def _render_thumbnail(frame_bgr, hook_text, accent_keyword=""):
     draw = ImageDraw.Draw(img)
     max_text_w = int(w * _THUMB_MAX_TEXT_W_RATIO)
     hook_upper = hook_text.upper()
+
+    # Auto-shrink font when any single word overflows the max text width
+    words = hook_upper.split()
+    while font_size > 36 and words:
+        longest = max(words, key=len)
+        bbox = draw.textbbox((0, 0), longest, font=title_font)
+        if bbox[2] - bbox[0] <= max_text_w:
+            break
+        font_size -= 4
+        if font_path:
+            title_font = ImageFont.truetype(font_path, font_size)
+        else:
+            title_font = ImageFont.load_default()
+
     lines = _wrap_text(hook_upper, title_font, max_text_w, draw)
     line_height = int(font_size * 1.30)
     total_text_h = line_height * len(lines)
@@ -447,7 +461,8 @@ def generate_thumbnail_card(
             os.path.dirname(video_path), "_thumbnail.mp4"
         )
 
-    # Very subtle 1.2% push-in zoom + text fade-in over 0.3s + fade-out last 0.2s
+    # Very subtle 1.2% push-in zoom + fade-out last 0.2s (NO fade-in so
+    # frame 0 = clean thumbnail — platforms pick it as cover image).
     zoom_expr = (
         f"zoompan="
         f"z='1+0.012*on/{total_frames}':"
@@ -456,7 +471,6 @@ def generate_thumbnail_card(
         f"d={total_frames}:"
         f"s={w_frame}x{h_frame}:"
         f"fps={fps},"
-        f"fade=t=in:st=0:d=0.15,"
         f"fade=t=out:st={duration - 0.20}:d=0.20"
     )
 
