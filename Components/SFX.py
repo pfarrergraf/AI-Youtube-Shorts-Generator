@@ -339,9 +339,8 @@ def _build_single_sfx_filter(
         parts.append(f"afade=t=out:st=0:d={_format_seconds(fade_out_sec)}")
 
     parts.append(f"adelay={start_ms}|{start_ms}")
-    parts.append(f"{output_label}")
 
-    return ",".join(parts)
+    return ",".join(parts) + output_label
 
 
 def _build_filter_complex_for_sfx(
