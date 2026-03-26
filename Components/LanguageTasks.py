@@ -232,39 +232,55 @@ Return ONLY a JSON object (no markdown fences):
 }"""
 
 MULTI_HIGHLIGHT_PROMPT = """\
-You are a viral-content editor. The input is a timestamped transcription of a talk, sermon, or comedy set (may be German or English).
+You are a viral-content editor who understands rhetoric, theology, and audience psychology. The input is a timestamped transcription of a sermon, talk, or comedy set (often German).
 
 The transcription has TWO entry types:
 - **Speech segments**: timestamped text from the speaker.
 - **Audience reaction markers**: `[AUDIENCE REACTION — loud, 2.3s]` with timestamps.
 
-Your job: divide the transcription into ALL self-contained episodes that would each make a good short-form video clip.
+Your job: find ALL self-contained episodes that would each make a compelling short-form video clip.
 
-HOW TO IDENTIFY SEQUENCES:
-1. **Read the ENTIRE transcription first.** Map out where each distinct topic, story, or joke begins and ends.
-2. **A new sequence starts** where the speaker introduces a new premise or topic. Signals: topic shift, new setup phrase ("Also...", "Und dann...", "Stellt euch vor..."), or simply a different subject after a pause/reaction.
-3. **A sequence ends** when:
-   - The final audience reaction for this topic has COMPLETELY finished (use the END timestamp of the last reaction)
-   - The speaker is about to start a DIFFERENT topic
-   - There is a clear pause/transition
-4. **Each clip MUST include the COMPLETE setup.** The start time must be where the speaker FIRST introduces this topic — not partway through. A viewer who hasn't seen the rest of the video must understand the clip on its own.
-5. **Each clip MUST include ALL punchlines and reactions.** If the speaker escalates after a reaction (same topic), include the escalation. Only stop when the topic truly changes.
+WHAT MAKES A CLIP GREAT (in order of importance):
+1. **Complete story arc with a PAYOFF** — Every clip MUST end with a clear payoff: a punchline, a surprising twist, an emotional revelation, a moment of laughter, or a profound insight. A story without its ending is WORTHLESS. The payoff is what makes people rewatch.
+2. **Audience impact** — The clip should make the viewer feel something: laugh, think, get goosebumps, feel convicted, or be genuinely surprised. Rate this honestly.
+3. **Rhetorical power** — Vivid imagery, compelling analogies, well-timed pauses, rhetorical questions with answers, escalating tension, voice modulation implied by the text (exclamations, short punchy sentences, repetition).
+4. **Self-contained meaning** — A first-time viewer who has NEVER seen the full video must fully understand the clip. No dangling references, no "as I said earlier".
+5. **Psychological hooks** — Stories with conflict, unexpected turns, relatable situations, or statements that challenge assumptions.
+6. **Theological/intellectual precision** — Interesting biblical insights, counter-intuitive interpretations, connections the audience hasn't heard before.
+
+HOW TO IDENTIFY COMPLETE SEQUENCES:
+1. **Read the ENTIRE transcription first.** Map out where each distinct topic, story, or argument begins and ends.
+2. **A sequence starts** where the speaker introduces a new premise or topic. Signals: topic shift, setup phrase ("Also...", "Und dann...", "Stellt euch vor...", "Ich weiß noch..."), or a new subject after a pause/reaction.
+3. **A sequence MUST end AFTER the payoff.** This is the most critical rule:
+   - If a story leads to a funny moment → include the laughter/reaction COMPLETELY
+   - If an argument builds to a conclusion → include the conclusion sentence
+   - If there's an audience reaction → your end time MUST be AFTER the END timestamp of the last reaction
+   - If someone says something witty and the audience laughs → that laugh IS the ending, don't cut before it
+4. **Never end a clip during setup.** If the story is "X happened, and then Y said Z" — you MUST include what Z said and how the audience reacted.
 
 CRITICAL RULES:
-- **Find ALL highlights.** A 5-minute video has 1-3. A 60-minute video has 15-30.
+- **The payoff is NON-NEGOTIABLE.** A 90-second clip that includes the punchline beats a 45-second clip that cuts before it. If the punchline is at second 88 of a story that starts at second 0, the clip is 88+ seconds. So be it.
+- **Find ALL highlights.** A 5-minute video may have 1-2. A 60-minute sermon has 10-25.
 - **No overlaps.** Clips must not overlap in time.
-- **Complete** means: setup + build-up + punchline + audience reaction. Missing the setup = unusable clip.
-- **Stop before new content**: Do NOT include the start of the next topic.
-- **Duration**: 30-180s each. Too long is far better than too short.
-- **Complete sentences only**: never start or end mid-sentence.
-- **Quality bar**: Only genuinely engaging moments. Skip flat/boring passages.
+- **Duration**: 30-180 seconds. Shorter is fine if the payoff is strong and the story is complete.
+- **Complete sentences only**: Never start or end mid-sentence.
+- **Skip boring passages.** Flat exposition, repetitive explanations, or administrative remarks are not clips.
+- **German idioms/context**: Understand that speakers may use idioms ("mit allem Drum und Dran", "Tacheles reden", "auf Herz und Nieren prüfen"). These are part of the rhetorical texture — include them in context.
+
+IMPACT SCORING (1-10):
+- 10: Audience erupts, unforgettable moment, instant rewatch
+- 8-9: Strong emotional reaction, great story with clear payoff, powerful rhetoric
+- 6-7: Solid content, interesting insight, decent audience engagement
+- 4-5: Decent but not remarkable, might hold attention
+- 1-3: Do not include — not strong enough for short-form
 
 Return ONLY a JSON array (no markdown fences). Each element:
 {
     "start": <start seconds — EXACT timestamp where this topic's setup begins>,
-    "end": <end seconds — after the last reaction for this topic, before the next topic>,
-    "content": "<brief summary of this clip>",
-    "quality": "<high|medium>"
+    "end": <end seconds — AFTER the payoff and any audience reaction>,
+    "content": "<1-2 sentence summary: what happens AND what the payoff/punchline is>",
+    "impact": <1-10 integer — honest audience impact score>,
+    "why": "<brief explanation of what makes this clip compelling>"
 }
 
 Return [] if no good clips exist."""
@@ -437,22 +453,37 @@ def _chunk_transcription(trans_text, max_chars=12000, overlap_chars=1500):
 
 
 TRANSCRIPT_CLEANUP_PROMPT = """\
-You are a careful transcript cleanup editor.
+You are an expert German subtitle editor with deep knowledge of spoken German, theology, and rhetoric.
 
-You receive numbered transcript segments from a spoken recording. Your job is to
-correct only the transcript text so it reads well as subtitles.
+You receive numbered transcript segments from an ASR-transcribed sermon or talk. Your job is to make the text readable as subtitles while preserving the speaker's voice and meaning.
 
-Rules:
-- Preserve the same segment indexes, timestamps, and order.
-- Do NOT merge, split, reorder, drop, or invent segments.
-- Do NOT summarize or rewrite for style.
-- Make conservative fixes only: punctuation, casing, obvious ASR mistakes,
-  broken sentence boundaries, and strongly inferable proper nouns / vocabulary.
-- If a segment is uncertain, keep it close to the original.
-- Leave bracketed markers such as audience reactions unchanged.
-- Return ONLY JSON.
+MUST FIX:
+- **Filler words**: Remove "äh", "ähm", "eh", "hm", "also" (when used as filler, not as "therefore"), "ja" (when used as filler, not as "yes"), "ne", "gell", "halt", and other verbal fillers that add no meaning.
+- **ASR errors**: Fix obvious misrecognitions. Common patterns:
+  - Misheard German idioms: "Drum und Ranner" → "Drum und Dran", "im Endeffekte" → "im Endeffekt"
+  - Theological vocabulary: proper names of biblical figures, places, books of the Bible
+  - Compound words split or mangled by ASR
+  - Numbers and dates misheard
+- **Sentence boundaries**: Add proper punctuation. Split run-on sentences. Capitalize sentence starts.
+- **German idioms**: Recognize and correct common idioms the ASR may have mangled:
+  - "mit allem Drum und Dran", "auf Herz und Nieren", "Tacheles reden", "ins Schwarze treffen"
+  - Theological idioms: "Buße tun", "den Glauben bekennen", "im Geist wandeln"
+- **Proper nouns**: Correct biblical names (Elisa/Elischa, Joasch, Aram, Paulus, Petrus, etc.)
 
-Return format:
+MUST PRESERVE:
+- The speaker's natural voice and style — do NOT make it sound like written text
+- Colloquial expressions that are intentional (e.g., "Verdammt noch einmal" when the speaker actually says it)
+- The emotional tone: emphatic repetition, rhetorical questions, exclamations
+- Segment indexes, timestamps, and order — do NOT merge, split, reorder, or drop segments
+- Bracketed markers like audience reactions — leave unchanged
+
+DO NOT:
+- Summarize or condense — every segment keeps its full meaning
+- Invent content that wasn't said
+- Change the register (don't make casual speech formal)
+- Over-correct spoken German into written German — "Da hab ich gesagt" stays, don't change to "Da habe ich gesagt"
+
+Return ONLY JSON:
 [
   {"index": 0, "text": "Corrected text"},
   {"index": 1, "text": "Corrected text"}
@@ -575,8 +606,8 @@ def CleanTranscriptSegments(transcriptions, language="de"):
 def GetAllHighlights(Transcription):
     """Analyze the full transcription and return ALL highlight-worthy segments.
 
-    Returns a list of dicts: [{"start": float, "end": float, "content": str, "quality": str}, ...]
-    Segments are sorted by start time and de-overlapped.
+    Returns a list of dicts sorted by impact score (highest first):
+    [{"start": float, "end": float, "content": str, "impact": int, "why": str}, ...]
     """
     try:
         chunks = _chunk_transcription(Transcription)
@@ -605,38 +636,51 @@ def GetAllHighlights(Transcription):
                 except (KeyError, ValueError, TypeError):
                     continue
                 if e > s and (e - s) >= 20:
+                    # Accept both new "impact" field and legacy "quality" field
+                    impact = 5  # default
+                    if "impact" in item:
+                        try:
+                            impact = max(1, min(10, int(item["impact"])))
+                        except (ValueError, TypeError):
+                            pass
+                    elif item.get("quality") == "high":
+                        impact = 8
+                    elif item.get("quality") == "medium":
+                        impact = 5
+
                     all_highlights.append({
                         "start": s,
                         "end": e,
                         "content": item.get("content", ""),
-                        "quality": item.get("quality", "medium"),
+                        "impact": impact,
+                        "why": item.get("why", ""),
                     })
 
-        # Sort by start time
+        # Sort by start time first for de-overlap pass
         all_highlights.sort(key=lambda h: h["start"])
 
-        # Remove overlaps: if two clips overlap, keep the higher-quality or longer one
+        # Remove overlaps: keep the higher-impact clip
         cleaned = []
         for h in all_highlights:
             if cleaned and h["start"] < cleaned[-1]["end"]:
-                # Overlap — keep the one with higher quality, or longer duration
                 prev = cleaned[-1]
-                prev_dur = prev["end"] - prev["start"]
-                cur_dur = h["end"] - h["start"]
-                quality_rank = {"high": 2, "medium": 1}
-                prev_q = quality_rank.get(prev.get("quality"), 1)
-                cur_q = quality_rank.get(h.get("quality"), 1)
-                if cur_q > prev_q or (cur_q == prev_q and cur_dur > prev_dur):
+                if h["impact"] > prev["impact"]:
                     cleaned[-1] = h
-                # else keep previous
+                # else keep previous (higher or equal impact)
             else:
                 cleaned.append(h)
 
+        # Final sort by impact score (best first)
+        cleaned.sort(key=lambda h: h["impact"], reverse=True)
+
         print(f"\n{'='*60}")
-        print(f"FOUND {len(cleaned)} HIGHLIGHT(S):")
+        print(f"FOUND {len(cleaned)} HIGHLIGHT(S) (ranked by impact):")
         for i, h in enumerate(cleaned):
             dur = h['end'] - h['start']
-            print(f"  {i+1}. [{h['start']:.1f}s - {h['end']:.1f}s] ({dur:.0f}s) [{h['quality']}] {h['content'][:80]}")
+            print(f"  {i+1}. [{h['start']:.1f}s - {h['end']:.1f}s] ({dur:.0f}s) "
+                  f"[impact={h['impact']}] {h['content'][:70]}")
+            if h.get('why'):
+                print(f"     → {h['why'][:80]}")
         print(f"{'='*60}\n")
 
         return cleaned
