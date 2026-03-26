@@ -1,12 +1,12 @@
 # AI YouTube Shorts Generator
 
-AI-powered tool that extracts highlight clips from long-form videos, crops them to vertical 9:16 format with DNN face tracking, adds burned-in ASS subtitles, and exports MP4 shorts. Uses a local LLM (via LM Studio) for highlight selection and faster-whisper for GPU-accelerated transcription.
+AI-powered tool that extracts highlight clips from long-form videos, crops them to vertical 9:16 format with DNN face tracking, adds burned-in ASS subtitles, and exports MP4 shorts. Uses a local LLM via vLLM for highlight selection and faster-whisper for GPU-accelerated transcription.
 
 ## Features
 
 - **Multi-highlight extraction** — analyzes the full transcription and creates a separate short for every good segment (default). Use `--single` for one best clip.
 - **GPU-accelerated transcription** — faster-whisper `large-v3` on CUDA with word-level timestamps and audience-reaction detection (laughter, applause).
-- **Local LLM highlight selection** — LM Studio (any OpenAI-compatible model). Auto-starts the server and auto-loads the configured model via the `lms` CLI.
+- **Local LLM highlight selection** — local vLLM by default. LM Studio remains supported as a compatibility fallback.
 - **DNN face tracking** — per-frame face detection with smooth camera effects for vertical crop.
 - **ASS subtitles** — burned-in captions via ffmpeg (max 4 words/line, 2 lines). Font, size, and color are configurable.
 - **NVENC encoding** — all ffmpeg steps use `h264_nvenc` for GPU-accelerated video encoding.
@@ -21,7 +21,7 @@ AI-powered tool that extracts highlight clips from long-form videos, crops them 
 - **Python 3.10** (required for faster-whisper / ctranslate2 compatibility)
 - **FFmpeg** on PATH (with NVENC support for GPU encoding)
 - **NVIDIA GPU** with CUDA support
-- **LM Studio** installed (the code auto-starts it and loads the model)
+- **Local vLLM server** running on `localhost:1234` (or adjust the `.env` values)
 - [**uv**](https://docs.astral.sh/uv/) package manager
 
 ### Installation
@@ -47,10 +47,14 @@ uv pip install --python .venv\Scripts\python.exe --pre --upgrade --force-reinsta
 Create a `.env` file in the project root:
 
 ```env
-OPENAI_API=lm-studio
-OPENAI_BASE_URL=http://localhost:1234/v1
-LLM_MODEL=qwen2.5-72b-instruct
+VLLM_API_KEY=local-vllm
+VLLM_BASE_URL=http://127.0.0.1:1234/v1
+VLLM_MODEL=qwen2.5-72b-instruct
 ```
+
+Legacy compatibility:
+- `OPENAI_API`, `OPENAI_BASE_URL`, and `LLM_MODEL` are still accepted
+- but `VLLM_*` is now the preferred local-server configuration
 
 ## Usage
 
@@ -137,7 +141,7 @@ channel_urls.py          # Extract URLs from a channel page
 Components/
   Edit.py                # Audio extraction, clip cutting (NVENC)
   Transcription.py       # faster-whisper transcription + audience reactions
-  LanguageTasks.py       # LLM highlight selection + LM Studio auto-start
+  LanguageTasks.py       # LLM highlight selection + local server checks
   FaceCrop.py            # 9:16 vertical crop with DNN face tracking
   Subtitles.py           # ASS subtitle burning (ffmpeg NVENC)
   YoutubeDownloader.py   # YouTube download via pytubefix
@@ -152,9 +156,14 @@ All settings are in `.env`. Key variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_API` | — | API key (any non-empty string for LM Studio) |
-| `OPENAI_BASE_URL` | `http://localhost:1234/v1` | LLM endpoint |
-| `LLM_MODEL` | `gpt-4o-mini` | Model identifier |
+| `VLLM_API_KEY` | `local-vllm` | Local vLLM API key |
+| `VLLM_BASE_URL` | `http://127.0.0.1:1234/v1` | Local vLLM endpoint |
+| `VLLM_MODEL` | `qwen2.5-72b-instruct` | Model identifier |
+
+Legacy aliases:
+- `OPENAI_API` / `OPENAI_API_KEY`
+- `OPENAI_BASE_URL` / `OPENAI_API_BASE`
+- `LLM_MODEL`
 
 Output directory is set at the top of `main.py` (`OUTPUT_DIR`).
 
@@ -165,4 +174,3 @@ See [INSTALL_CPU.md](INSTALL_CPU.md) for setup without an NVIDIA GPU.
 ## License
 
 MIT
-

@@ -2,7 +2,7 @@
 
 ## Overview
 
-AI-powered tool that extracts highlight clips from long-form videos (primarily German sermons and comedy), crops them to vertical 9:16 format with DNN face tracking, adds ASS subtitles, and exports MP4 shorts. Uses a local LLM (via LM Studio) for highlight selection and faster-whisper for GPU-accelerated transcription.
+AI-powered tool that extracts highlight clips from long-form videos (primarily German sermons and comedy), crops them to vertical 9:16 format with DNN face tracking, adds ASS subtitles, and exports MP4 shorts. Uses a local LLM via vLLM for highlight selection and faster-whisper for GPU-accelerated transcription.
 
 ## Architecture
 
@@ -17,7 +17,7 @@ channel_urls.py          # Extract all video URLs from a YouTube channel page
 Components/
   Edit.py                # Audio extraction and clip cutting (NVENC)
   Transcription.py       # Speech-to-text via faster-whisper (large-v3, CUDA) + audience reaction detection
-  LanguageTasks.py       # LLM highlight selection + LM Studio auto-start/auto-load + retry logic
+  LanguageTasks.py       # LLM highlight selection + local server checks + retry logic
   FaceCrop.py            # 9:16 vertical crop with DNN face tracking + camera effects + audio merge
   Subtitles.py           # Burn-in ASS captions via ffmpeg (NVENC)
   YoutubeDownloader.py   # YouTube download via pytubefix + ffmpeg merge
@@ -67,7 +67,7 @@ After the torch stack validates on either path, run the repo smoke tests:
 - **Torch validation**: Always use the standard one-line CUDA test command above after installing or changing torch.
 - **CUDA policy**: Never switch this repo to CPU as the default path. If CUDA is broken, debug the issue instead.
 - **Validated torch stacks on this machine**: Preferred first: `2.12.0.dev* + cu130`. Stable fallback: `2.9.1+cu128`.
-- **LLM backend**: LM Studio at `localhost:1234`. Configurable via `.env` vars `OPENAI_BASE_URL`, `OPENAI_API`, `LLM_MODEL`. The code auto-starts LM Studio and auto-loads the configured model via the `lms` CLI if they are not running.
+- **LLM backend**: local vLLM at `localhost:1234` by default. Configure via `.env` vars `VLLM_BASE_URL`, `VLLM_API_KEY`, `VLLM_MODEL`. The old `OPENAI_*` names still work as compatibility aliases. LM Studio is only the fallback mode now.
 - **Whisper model**: `large-v3` (multilingual, auto-detects language). Runs on GPU alongside the LLM.
 - **Primary language**: German (Predigten / sermons). Code must not hardcode `language="en"` anywhere.
 - **requirements.txt**: Keep direct dependencies only. Never commit a frozen transitive dependency dump. `pyproject.toml` is authoritative; `requirements.txt` is a convenience mirror.
@@ -83,7 +83,7 @@ After the torch stack validates on either path, run the repo smoke tests:
 
 - `select.select()` on stdin does not work on Windows. Use `input()` for interactive prompts.
 - MoviePy 1.0.3 `TextClip` requires ImageMagick installed and available on `PATH`.
-- LM Studio may not support `function_calling` structured output. The code already has fallbacks to `json_mode` and raw parsing.
+- Some local servers may not support `function_calling` structured output. The code already has fallbacks to `json_mode` and raw parsing.
 - OpenCV `VideoWriter` on Windows needs `XVID`, not `mp4v`.
 - `Components/Speaker.py` and `Components/SpeakerDetection.py` are legacy files. Do not import them in the main pipeline.
 - A torch install that imports successfully is not enough. Treat `torch.cuda.is_available()`, `torch.cuda.device_count()`, and `cudnn.is_available()` as the minimum validation gate.

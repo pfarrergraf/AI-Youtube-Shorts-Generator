@@ -9,24 +9,59 @@ import urllib.error
 
 load_dotenv()
 
-api_key = os.getenv("OPENAI_API")
-api_base = os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE")
-model_name = os.getenv("LLM_MODEL", "gpt-4o-mini")
+def _first_env(*names, default=None):
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value
+    return default
 
-if not api_key:
-    raise ValueError("API key not found. Make sure it is defined in the .env file.")
 
-# ---------- LM Studio auto-start / model auto-load ----------
+# Prefer local vLLM naming, keep OpenAI-compatible names as compatibility fallbacks.
+api_key = _first_env(
+    "VLLM_API_KEY",
+    "LOCAL_LLM_API_KEY",
+    "OPENAI_API",
+    "OPENAI_API_KEY",
+    default="local-vllm",
+)
+api_base = _first_env(
+    "VLLM_BASE_URL",
+    "LOCAL_LLM_BASE_URL",
+    "OPENAI_BASE_URL",
+    "OPENAI_API_BASE",
+    default="http://127.0.0.1:1234/v1",
+)
+model_name = _first_env(
+    "VLLM_MODEL",
+    "LOCAL_LLM_MODEL",
+    "LLM_MODEL",
+    default="qwen2.5-72b-instruct",
+)
+
+
+def _llm_backend_mode() -> str:
+    explicit = (_first_env("LLM_BACKEND", "LOCAL_LLM_BACKEND", default="") or "").strip().lower()
+    if explicit in {"vllm", "local-vllm", "local_vllm"}:
+        return "vllm"
+    if explicit in {"lmstudio", "lm-studio", "lms"}:
+        return "lmstudio"
+    if any(os.getenv(name) for name in ("VLLM_API_KEY", "VLLM_BASE_URL", "VLLM_MODEL")):
+        return "vllm"
+    return "lmstudio"
+
+
+# ---------- Local LLM server detection / optional LM Studio auto-start ----------
 
 _LMS_CLI = (
     shutil.which("lms")
     or os.path.expandvars(r"%USERPROFILE%\.lmstudio\bin\lms.exe")
 )
 
-_lm_studio_ready = False  # cached flag so we only check once per process
+_llm_server_ready = False  # cached flag so we only check once per process
 
 
-def _lms_server_reachable() -> bool:
+def _llm_server_reachable() -> bool:
     """Return True if the LLM server responds on the configured port."""
     try:
         url = (api_base or "http://localhost:1234/v1").rstrip("/")
@@ -44,7 +79,7 @@ def _lms_server_reachable() -> bool:
         return False
 
 
-def _lms_has_model_loaded() -> bool:
+def _llm_has_model_loaded() -> bool:
     """Return True if at least one model is loaded and ready."""
     try:
         url = (api_base or "http://localhost:1234/v1").rstrip("/")
@@ -62,8 +97,8 @@ def _lms_has_model_loaded() -> bool:
         return False
 
 
-def _lms_run(args: list, timeout: int = 120) -> bool:
-    """Run an lms CLI command.  Returns True on success."""
+def _lmstudio_run(args: list, timeout: int = 120) -> bool:
+    """Run an LM Studio CLI command. Returns True on success."""
     exe = _LMS_CLI
     if not exe or not os.path.isfile(exe):
         print(f"  [LM Studio] lms CLI not found at {exe}")
@@ -86,36 +121,48 @@ def _lms_run(args: list, timeout: int = 120) -> bool:
         return False
 
 
-def _ensure_lm_studio():
-    """Make sure LM Studio server is running and has a model loaded.
+def _ensure_llm_server():
+    """Ensure the configured local LLM endpoint is reachable.
 
-    1. Check if server is reachable; if not, start it via ``lms server start``.
-    2. Check if a model is loaded; if not, load the configured model via
-       ``lms load <model> -y``.
+    For vLLM, this only checks the configured server.
+    For LM Studio, this also tries to start the server and load the model.
     """
-    global _lm_studio_ready
-    if _lm_studio_ready:
+    global _llm_server_ready
+    if _llm_server_ready:
+        return
+    backend_mode = _llm_backend_mode()
+
+    if _llm_server_reachable():
+        if _llm_has_model_loaded():
+            print(f"  [LLM] {backend_mode.upper()} server has model(s) loaded — ready.")
+            _llm_server_ready = True
+            return
+        if backend_mode != "lmstudio":
+            print(f"  [LLM] {backend_mode.upper()} server reachable at {api_base}, but no models were reported.")
+            return
+
+    if backend_mode != "lmstudio":
+        print(f"  [LLM] vLLM server not reachable at {api_base}. Start your local vLLM server first.")
         return
 
     # --- Step 1: server ---
-    if not _lms_server_reachable():
-        print("  [LM Studio] Server not reachable — starting it...")
-        _lms_run(["server", "start"])
-        # Wait up to 30s for the server to come up
-        for _ in range(15):
-            time.sleep(2)
-            if _lms_server_reachable():
-                print("  [LM Studio] Server is up.")
-                break
-        else:
-            print("  [LM Studio] WARNING: server did not start within 30s")
-            return
+    print("  [LM Studio] Server not reachable — starting it...")
+    _lmstudio_run(["server", "start"])
+    # Wait up to 30s for the server to come up
+    for _ in range(15):
+        time.sleep(2)
+        if _llm_server_reachable():
+            print("  [LM Studio] Server is up.")
+            break
+    else:
+        print("  [LM Studio] WARNING: server did not start within 30s")
+        return
 
     # --- Step 2: model ---
     # Check via API first (works with vLLM and LM Studio)
-    if _lms_has_model_loaded():
+    if _llm_has_model_loaded():
         print(f"  [LLM] Server has model(s) loaded — ready.")
-        _lm_studio_ready = True
+        _llm_server_ready = True
         return
 
     # Derive the model key from the configured model_name.
@@ -131,19 +178,24 @@ def _ensure_lm_studio():
             )
             if model_key.lower() in (ps_result.stdout or "").lower():
                 print(f"  [LM Studio] Model '{model_key}' already loaded.")
-                _lm_studio_ready = True
+                _llm_server_ready = True
                 return
     except Exception:
         pass
 
     # Not loaded — load it
-    ok = _lms_run(["load", model_key, "-y", "--gpu", "max"], timeout=180)
+    ok = _lmstudio_run(["load", model_key, "-y", "--gpu", "max"], timeout=180)
     if ok:
         print(f"  [LM Studio] Model '{model_key}' loaded successfully.")
     else:
         print(f"  [LM Studio] WARNING: could not auto-load model '{model_key}'")
 
-    _lm_studio_ready = True
+    _llm_server_ready = True
+
+
+def _ensure_lm_studio():
+    """Backward-compatible alias for older callers."""
+    _ensure_llm_server()
 
 SYSTEM_PROMPT = """\
 You are a viral-content editor. The input is a timestamped transcription of a talk or sermon (often German).
@@ -222,7 +274,7 @@ def GetHighlight(Transcription):
     from openai import OpenAI
 
     try:
-        _ensure_lm_studio()
+        _ensure_llm_server()
         client = OpenAI(api_key=api_key, base_url=api_base)
 
         print(f"Calling LLM ({model_name}) for highlight selection...")
@@ -307,13 +359,13 @@ def GetHighlight(Transcription):
 def _call_llm(system_prompt, user_content, temperature=0.7, _retries=3):
     """Shared helper: call LLM, strip think blocks / fences, return raw text.
 
-    Automatically ensures LM Studio is running with a model loaded.
+    Automatically checks the configured local LLM server.
     Retries on transient "No models loaded" or connection errors.
     """
     from openai import OpenAI
     import re as _re
 
-    _ensure_lm_studio()
+    _ensure_llm_server()
 
     last_err = None
     for attempt in range(1, _retries + 1):
@@ -340,13 +392,13 @@ def _call_llm(system_prompt, user_content, temperature=0.7, _retries=3):
             is_conn_error = "connection" in err_msg or "refused" in err_msg
 
             if is_model_error or is_conn_error:
-                global _lm_studio_ready
-                _lm_studio_ready = False  # force re-check
+                global _llm_server_ready
+                _llm_server_ready = False  # force re-check
                 wait = 10 * attempt
                 print(f"  [LLM] Attempt {attempt}/{_retries} failed: {e}")
-                print(f"  [LLM] Re-checking LM Studio in {wait}s...")
+                print(f"  [LLM] Re-checking local LLM server in {wait}s...")
                 time.sleep(wait)
-                _ensure_lm_studio()
+                _ensure_llm_server()
             else:
                 raise  # non-recoverable error, don't retry
 
@@ -382,6 +434,142 @@ def _chunk_transcription(trans_text, max_chars=12000, overlap_chars=1500):
         chunks.append("\n".join(current_lines))
 
     return chunks
+
+
+TRANSCRIPT_CLEANUP_PROMPT = """\
+You are a careful transcript cleanup editor.
+
+You receive numbered transcript segments from a spoken recording. Your job is to
+correct only the transcript text so it reads well as subtitles.
+
+Rules:
+- Preserve the same segment indexes, timestamps, and order.
+- Do NOT merge, split, reorder, drop, or invent segments.
+- Do NOT summarize or rewrite for style.
+- Make conservative fixes only: punctuation, casing, obvious ASR mistakes,
+  broken sentence boundaries, and strongly inferable proper nouns / vocabulary.
+- If a segment is uncertain, keep it close to the original.
+- Leave bracketed markers such as audience reactions unchanged.
+- Return ONLY JSON.
+
+Return format:
+[
+  {"index": 0, "text": "Corrected text"},
+  {"index": 1, "text": "Corrected text"}
+]
+"""
+
+
+def _chunk_segments_for_cleanup(transcriptions, max_chars=9000, max_segments=60):
+    """Split speech segments into LLM-sized chunks while preserving indexes."""
+    chunks = []
+    current = []
+    current_len = 0
+
+    for idx, (text, start, end) in enumerate(transcriptions):
+        raw_text = str(text).strip()
+        if not raw_text or raw_text.startswith("["):
+            continue
+
+        line = f"[{idx}] {float(start):.2f} - {float(end):.2f} | {raw_text}"
+        line_len = len(line) + 1
+
+        if current and (len(current) >= max_segments or current_len + line_len > max_chars):
+            chunks.append(current)
+            current = []
+            current_len = 0
+
+        current.append(
+            {
+                "index": idx,
+                "start": float(start),
+                "end": float(end),
+                "text": raw_text,
+            }
+        )
+        current_len += line_len
+
+    if current:
+        chunks.append(current)
+
+    return chunks
+
+
+def _parse_cleanup_response(text):
+    parsed = _json.loads(text)
+    if isinstance(parsed, dict):
+        for key in ("segments", "items", "results", "data"):
+            value = parsed.get(key)
+            if isinstance(value, list):
+                return value
+        return [parsed]
+    if isinstance(parsed, list):
+        return parsed
+    return []
+
+
+def CleanTranscriptSegments(transcriptions, language="de"):
+    """Conservatively clean segment text for subtitle rendering.
+
+    Keeps segment timing untouched and returns the same ``[[text, start, end], ...]``
+    shape as the input.  This is intentionally segment-level cleanup so it can be
+    used before subtitle generation without remapping word timestamps.
+    """
+    if not transcriptions:
+        return []
+
+    cleaned = [[str(text), float(start), float(end)] for text, start, end in transcriptions]
+    chunks = _chunk_segments_for_cleanup(cleaned)
+    if not chunks:
+        return cleaned
+
+    print(f"Cleaning transcript text in {len(chunks)} chunk(s)...")
+    updated = 0
+
+    for chunk_idx, chunk in enumerate(chunks, start=1):
+        lines = []
+        for item in chunk:
+            lines.append(
+                f"[{item['index']}] {item['start']:.2f} - {item['end']:.2f} | {item['text']}"
+            )
+
+        user_content = (
+            f"Language hint: {language}\n"
+            "Correct these subtitle transcript segments conservatively.\n"
+            "Return only JSON.\n\n"
+            + "\n".join(lines)
+        )
+
+        try:
+            response = _call_llm(TRANSCRIPT_CLEANUP_PROMPT, user_content, temperature=0.2)
+            items = _parse_cleanup_response(response)
+        except Exception as exc:
+            print(f"  [Cleanup] Chunk {chunk_idx}/{len(chunks)} failed ({exc}); keeping original text.")
+            continue
+
+        valid_indexes = {item["index"] for item in chunk}
+        applied = 0
+        for item in items:
+            try:
+                idx = int(item["index"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if idx not in valid_indexes:
+                continue
+
+            new_text = str(item.get("text", "")).strip()
+            if not new_text:
+                continue
+
+            if cleaned[idx][0] != new_text:
+                cleaned[idx][0] = new_text
+                updated += 1
+                applied += 1
+
+        print(f"  [Cleanup] Chunk {chunk_idx}/{len(chunks)} updated {applied} segment(s).")
+
+    print(f"[Cleanup] Updated {updated} segment(s) total.")
+    return cleaned
 
 
 def GetAllHighlights(Transcription):
@@ -496,6 +684,7 @@ def GetJumpCuts(transcription_text, start, end):
     from openai import OpenAI
 
     try:
+        _ensure_llm_server()
         client = OpenAI(api_key=api_key, base_url=api_base)
 
         # Extract only the transcription lines within the selected range

@@ -68,7 +68,9 @@ pip install -r requirements-cpu.txt
 
 创建 `.env` 文件：
 ```bash
-OPENAI_API=your_openai_api_key_here
+VLLM_API_KEY=local-vllm
+VLLM_BASE_URL=http://127.0.0.1:1234/v1
+VLLM_MODEL=qwen2.5-72b-instruct
 ```
 
 ## Linux/Mac 安装步骤
@@ -131,5 +133,4 @@ python main.py
 - CPU 模式下，转录速度会明显慢于 GPU 模式（可能慢 5-10 倍）
 - 所有功能在 CPU 模式下都可用
 - 如果之后想使用 GPU，可以重新安装 `requirements.txt`（包含 CUDA 包）
-
 
