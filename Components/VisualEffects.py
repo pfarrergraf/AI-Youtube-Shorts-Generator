@@ -111,8 +111,11 @@ STYLE_PRESETS = {
 }
 
 # Which presets are eligible for random selection.
-# "clean" is intentionally included — not every short needs grading.
-_RANDOM_POOL = ["clean", "warm", "cool", "cinematic", "vintage", "high_contrast"]
+# Only "clean" by default — colour correction is handled entirely by
+# the fx-auto-correct preset in ai_after-effects.  Random inline grading
+# conflicts with the collar-aware white balance pipeline.
+# NEVER include VHS or vintage — see agents.md.
+_RANDOM_POOL = ["clean"]
 
 # Overlay fragments that can be combined with any colour grade.
 VIGNETTE_FILTER = "vignette=PI/4"

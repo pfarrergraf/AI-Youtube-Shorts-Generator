@@ -23,8 +23,9 @@ MIN_PHRASE_DURATION = 0.4
 MAX_PHRASE_DURATION = 1.6
 MAX_PHRASE_WORDS = MAX_WORDS_PER_PHRASE
 MIN_PHRASE_WORDS = 1
-HOLD_AFTER_PHRASE_SEC = 0.05
+HOLD_AFTER_PHRASE_SEC = 0.0
 MIN_WORD_DISPLAY_SEC = 0.02   # minimum time each word stays highlighted
+SILENCE_GAP_BREAK_SEC = 0.8  # force phrase break on silence gaps >= this
 
 # Stable wrapping defaults
 TARGET_CHARS_PER_LINE = 16
@@ -166,6 +167,13 @@ def segment_words_into_phrases(words):
         text = (w.get("text") or "").strip()
         if not text:
             continue
+
+        # Force phrase break when there is a long silence gap before this word
+        if current and w.get("start") is not None and current[-1].get("end") is not None:
+            gap = w["start"] - current[-1]["end"]
+            if gap >= SILENCE_GAP_BREAK_SEC:
+                phrases.append(current)
+                current = []
 
         current.append(w)
 
