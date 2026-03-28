@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 import json as _json
+from difflib import SequenceMatcher
 import os
 import shutil
 import subprocess
@@ -468,6 +469,10 @@ You are an expert German subtitle editor with deep knowledge of spoken German, t
 
 You receive numbered transcript segments from an ASR-transcribed sermon or talk. Your job is to make the text readable as subtitles while preserving the speaker's voice and meaning.
 
+PRIMARY OBJECTIVE (HIGHEST PRIORITY):
+- Keep the ACTUAL spoken words faithful. When unsure, keep the original ASR words.
+- Prefer minimal edits over stylistic rewrites.
+
 MUST FIX:
 - **Filler words**: Remove "äh", "ähm", "eh", "hm", "also" (when used as filler, not as "therefore"), "ja" (when used as filler, not as "yes"), "ne", "gell", "halt", and other verbal fillers that add no meaning.
 - **ASR errors**: Fix obvious misrecognitions. Common patterns:
@@ -491,8 +496,14 @@ MUST PRESERVE:
 DO NOT:
 - Summarize or condense — every segment keeps its full meaning
 - Invent content that wasn't said
+- Replace core lexical content words with plausible alternatives just because they fit context
+    (example of FORBIDDEN behavior: "Messias" -> "Christkind" unless the segment clearly contains that exact word)
 - Change the register (don't make casual speech formal)
 - Over-correct spoken German into written German — "Da hab ich gesagt" stays, don't change to "Da habe ich gesagt"
+
+IF UNCERTAIN:
+- Return the segment text unchanged.
+- Only perform changes when the correction is highly obvious from the segment itself.
 
 Return ONLY JSON:
 [
@@ -500,6 +511,59 @@ Return ONLY JSON:
   {"index": 1, "text": "Corrected text"}
 ]
 """
+
+
+# Conservative safety rails for cleanup application.
+# Goal: reject semantic drift / hallucinated rewrites while still allowing
+# punctuation, filler removal, and minor obvious ASR typo fixes.
+_CLEANUP_MIN_SIMILARITY = 0.72
+_CLEANUP_MAX_NEW_TOKEN_RATIO = 0.28
+_CLEANUP_STRIP_CHARS = " \t\n\r.,;:!?\"'`´()[]{}<>/\\|+-=_*~"
+
+
+def _cleanup_tokens(text: str) -> list[str]:
+    tokens = []
+    for part in str(text).split():
+        token = part.strip(_CLEANUP_STRIP_CHARS).lower()
+        if token:
+            tokens.append(token)
+    return tokens
+
+
+def _cleanup_change_is_conservative(original_text: str, candidate_text: str) -> bool:
+    """Return True if candidate is a conservative edit of original.
+
+    We allow punctuation and small lexical fixes, but reject broad rewrites
+    that introduce too many new content tokens.
+    """
+    original = str(original_text or "").strip()
+    candidate = str(candidate_text or "").strip()
+
+    if not candidate:
+        return False
+    if candidate == original:
+        return True
+
+    similarity = SequenceMatcher(None, original.lower(), candidate.lower()).ratio()
+
+    old_tokens = _cleanup_tokens(original)
+    new_tokens = _cleanup_tokens(candidate)
+    if not old_tokens or not new_tokens:
+        return similarity >= _CLEANUP_MIN_SIMILARITY
+
+    old_set = set(old_tokens)
+    new_only = [tok for tok in new_tokens if tok not in old_set]
+    new_ratio = len(new_only) / max(len(new_tokens), 1)
+
+    # Always reject highly dissimilar rewrites.
+    if similarity < _CLEANUP_MIN_SIMILARITY:
+        return False
+
+    # Reject candidates that introduce many new words unless the segment is tiny.
+    if len(old_tokens) >= 4 and new_ratio > _CLEANUP_MAX_NEW_TOKEN_RATIO:
+        return False
+
+    return True
 
 
 def _chunk_segments_for_cleanup(transcriptions, max_chars=9000, max_segments=60):
@@ -567,6 +631,7 @@ def CleanTranscriptSegments(transcriptions, language="de"):
 
     print(f"Cleaning transcript text in {len(chunks)} chunk(s)...")
     updated = 0
+    rejected = 0
 
     for chunk_idx, chunk in enumerate(chunks, start=1):
         lines = []
@@ -603,7 +668,11 @@ def CleanTranscriptSegments(transcriptions, language="de"):
             if not new_text:
                 continue
 
-            if cleaned[idx][0] != new_text:
+            old_text = cleaned[idx][0]
+            if old_text != new_text:
+                if not _cleanup_change_is_conservative(old_text, new_text):
+                    rejected += 1
+                    continue
                 cleaned[idx][0] = new_text
                 updated += 1
                 applied += 1
@@ -611,6 +680,8 @@ def CleanTranscriptSegments(transcriptions, language="de"):
         print(f"  [Cleanup] Chunk {chunk_idx}/{len(chunks)} updated {applied} segment(s).")
 
     print(f"[Cleanup] Updated {updated} segment(s) total.")
+    if rejected:
+        print(f"[Cleanup] Rejected {rejected} risky rewrite(s); kept original ASR wording.")
     return cleaned
 
 

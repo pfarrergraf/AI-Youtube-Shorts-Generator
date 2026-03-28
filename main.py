@@ -11,7 +11,11 @@ if os.path.exists(_im_path):
 
 from Components.YoutubeDownloader import download_youtube_video
 from Components.Edit import extractAudio, crop_video
-from Components.Transcription import transcribeAudio
+from Components.Transcription import transcribeAudioDetailed
+from Components.TranscriptionData import (
+    build_transcription_payload,
+    normalise_cached_transcription,
+)
 from Components.LanguageTasks import GetHighlight, GetAllHighlights
 from Components.FaceCrop import crop_to_vertical, combine_videos
 from Components.Subtitles import add_subtitles_to_video
@@ -44,6 +48,32 @@ def _smart_pad_end(clip_end, transcriptions, max_pad=3.0):
         pad = max_pad  # no next speech segment, safe to pad fully
 
     return clip_end + pad
+
+
+def _transcribe_with_word_timestamps(video_path, audio_file, cache_file):
+    Audio = extractAudio(video_path, audio_file)
+    if not Audio:
+        print("No audio file found")
+        sys.exit(1)
+
+    trans_data = transcribeAudioDetailed(Audio)
+    transcriptions, word_timestamps = normalise_cached_transcription(trans_data)
+    if len(transcriptions) == 0:
+        print("No transcriptions found")
+        sys.exit(1)
+
+    with open(cache_file, "w", encoding="utf-8") as f:
+        json.dump(
+            build_transcription_payload(transcriptions, word_timestamps),
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+    print(
+        f"✓ Transcription cached to {cache_file} "
+        f"({len(transcriptions)} segments, {len(word_timestamps)} words)"
+    )
+    return transcriptions, word_timestamps
 
 # Generate unique session ID for this run (for concurrent execution support)
 session_id = str(uuid.uuid4())[:8]
@@ -115,27 +145,38 @@ if Vid:
     try:
         # Check for cached transcription next to the source video
         cache_file = os.path.splitext(Vid)[0] + ".transcription.json"
-        
+        transcriptions = []
+        word_timestamps = []
+
         if os.path.exists(cache_file):
             print(f"Loading cached transcription from {cache_file}")
             with open(cache_file, "r", encoding="utf-8") as f:
-                transcriptions = json.load(f)
+                cached = json.load(f)
+            transcriptions, word_timestamps = normalise_cached_transcription(cached)
             print(f"✓ Loaded {len(transcriptions)} cached segments")
+            if transcriptions and word_timestamps:
+                print(f"✓ Loaded {len(word_timestamps)} cached word timestamps")
+            else:
+                print(
+                    "Cached transcription is missing subtitle timing data; "
+                    "regenerating cache for precise highlighted subtitles."
+                )
+                transcriptions, word_timestamps = _transcribe_with_word_timestamps(
+                    Vid,
+                    audio_file,
+                    cache_file,
+                )
         else:
-            Audio = extractAudio(Vid, audio_file)
-            if not Audio:
-                print("No audio file found")
-                sys.exit(1)
+            transcriptions, word_timestamps = _transcribe_with_word_timestamps(
+                Vid,
+                audio_file,
+                cache_file,
+            )
 
-            transcriptions = transcribeAudio(Audio)
-            if len(transcriptions) == 0:
-                print("No transcriptions found")
-                sys.exit(1)
-            
-            # Save transcription cache
-            with open(cache_file, "w", encoding="utf-8") as f:
-                json.dump(transcriptions, f, ensure_ascii=False, indent=2)
-            print(f"✓ Transcription cached to {cache_file}")
+        if word_timestamps:
+            print("✓ Subtitle timing mode: per-word timestamps")
+        else:
+            print("! Subtitle timing mode: chunked fallback (no word timestamps available)")
 
         print(f"\n{'='*60}")
         print(f"TRANSCRIPTION SUMMARY: {len(transcriptions)} segments")
@@ -225,7 +266,13 @@ if Vid:
                 crop_to_vertical(temp_clip, temp_cropped)
 
                 print(f"{prefix}Step 3/4: Adding subtitles...")
-                add_subtitles_to_video(temp_cropped, temp_subtitled, transcriptions, video_start_time=padded_start)
+                add_subtitles_to_video(
+                    temp_cropped,
+                    temp_subtitled,
+                    transcriptions,
+                    video_start_time=padded_start,
+                    word_timestamps=word_timestamps,
+                )
 
                 clean_title = clean_filename(video_title) if video_title else "output"
                 if len(highlights) > 1:

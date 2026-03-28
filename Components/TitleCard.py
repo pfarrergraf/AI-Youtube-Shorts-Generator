@@ -25,12 +25,12 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 # ── Shared defaults ──────────────────────────────────────────────
-THUMBNAIL_DURATION = 1.0  # seconds — short cover
+THUMBNAIL_DURATION = 1.5  # seconds — short cover
 CINEMATIC_DURATION = 2.5  # seconds — animated intro
 
 # Accent colour for the keyword (warm red, like TikTok thumbnails)
 ACCENT_COLOUR = (220, 40, 40, 255)  # RGBA red
-ACCENT_COLOUR_HEX = "#DC2828"
+ACCENT_COLOUR_HEX = "#860BF8"
 
 # Font discovery order (first match wins)
 _FONT_CANDIDATES = [
@@ -42,7 +42,7 @@ _FONT_CANDIDATES = [
 ]
 
 # Thumbnail text sizing
-_THUMB_FONT_RATIO = 0.080  # bigger than cinematic
+_THUMB_FONT_RATIO = 0.10  # bigger than cinematic
 _THUMB_MAX_TEXT_W_RATIO = 0.88
 
 # Cinematic defaults (kept from previous version)
@@ -70,12 +70,17 @@ NVENC_FLAGS = [
 
 # Thumbnail style catalogue
 THUMBNAIL_STYLES = ("classic", "text_reveal", "dramatic")
+# Extended fancy styles from ai_after-effects (rendered frame-by-frame)
+FANCY_STYLES = ("kinetic", "glitch", "neon", "distortion")
+ALL_STYLES = THUMBNAIL_STYLES + FANCY_STYLES
 _TEXT_REVEAL_FONT_RATIO = 0.12  # larger text for mask/cutout effect
+_FANCY_FONT_RATIO = 0.10        # font ratio for fancy title styles
+_TEXT_REVEAL_END_REVEAL_SEC = 0.50  # final reveal window for track-matte zoom-out
 
 # Background-music defaults
-_BG_MUSIC_VOLUME_DB = -15  # background music level
-_BG_FADE_OUT_SEC = 5.0     # fade-out duration at end
-_TARGET_PEAK_DB = -3.0     # target peak for speech audio
+_BG_MUSIC_VOLUME_DB = -16  # background music level
+_BG_FADE_OUT_SEC = 2.0     # fade-out duration at end
+_TARGET_PEAK_DB = -2.0     # target peak for speech audio
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -450,49 +455,30 @@ def _render_thumbnail_classic(frame_bgr, hook_text, accent_keyword=""):
 
 # ── Style: text_reveal (alpha-mask) ─────────────────────────────
 
-def _render_thumbnail_text_reveal(frame_bgr, hook_text, accent_keyword=""):
-    """Alpha-mask style: hook text reveals the speaker through letter cutouts.
+def _build_text_reveal_assets(frame_bgr, hook_text, accent_keyword=""):
+    """Build reusable assets for track-matte style and its end-transition.
 
-    The frame is heavily darkened; the hook text acts as a window that
-    shows the bright, slightly saturated speaker underneath.  A thin
-    stroke outlines each letter for definition.
+    Returns ``(base, dark, mask, outline)`` as RGBA/L images.
     """
     h, w = frame_bgr.shape[:2]
 
-    # Bright base — slightly boosted saturation + contrast
     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     base = Image.fromarray(frame_rgb).convert("RGB")
-    base = ImageEnhance.Color(base).enhance(1.30)
-    base = ImageEnhance.Contrast(base).enhance(1.15)
+    base = ImageEnhance.Color(base).enhance(1.35)
+    base = ImageEnhance.Contrast(base).enhance(1.20)
     base = base.convert("RGBA")
 
-    # Dark version — same frame, heavy overlay
-    dark = Image.fromarray(frame_rgb).convert("RGBA")
-    dark = Image.alpha_composite(dark, Image.new("RGBA", (w, h), (0, 0, 0, 185)))
+    # Pure black plate; the video is revealed only by the text mask.
+    dark = Image.new("RGBA", (w, h), (0, 0, 0, 255))
 
-    # Bottom gradient on dark layer too
-    gradient = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    grad_draw = ImageDraw.Draw(gradient)
-    for y_pos in range(int(h * 0.55), h):
-        frac = (y_pos - h * 0.55) / (h * 0.45)
-        alpha = int(70 * frac)
-        grad_draw.line([(0, y_pos), (w, y_pos)], fill=(0, 0, 0, alpha))
-    dark = Image.alpha_composite(dark, gradient)
-
-    # Font (larger than classic for a bolder mask)
-    font_path, title_font, font_size, lines, max_text_w, hook_upper = (
+    font_path, title_font, font_size, lines, _max_text_w, _hook_upper = (
         _thumb_font_setup(w, h, hook_text, font_ratio=_TEXT_REVEAL_FONT_RATIO)
     )
 
-    # Text lane
-    face_box = _detect_face_box(frame_bgr)
-    lane_top, lane_bottom = _pick_text_lane(face_box, w, h)
     line_height = int(font_size * 1.20)
     total_text_h = line_height * len(lines)
-    lane_h = lane_bottom - lane_top
-    text_y_start = lane_top + max(0, (lane_h - total_text_h) // 2)
+    text_y_start = (h - total_text_h) // 2
 
-    # ── Build text mask (white = reveal speaker) ──
     mask = Image.new("L", (w, h), 0)
     mask_draw = ImageDraw.Draw(mask)
 
@@ -501,15 +487,16 @@ def _render_thumbnail_text_reveal(frame_bgr, hook_text, accent_keyword=""):
         bbox = mask_draw.textbbox((0, 0), line, font=title_font)
         line_w = bbox[2] - bbox[0]
         x = (w - line_w) // 2
-        # Slight stroke expansion so the window is wider than the outline
-        mask_draw.text((x, text_y), line, font=title_font, fill=255,
-                       stroke_width=4, stroke_fill=255)
+        mask_draw.text(
+            (x, text_y),
+            line,
+            font=title_font,
+            fill=255,
+            stroke_width=5,
+            stroke_fill=255,
+        )
         text_y += line_height
 
-    # Composite: bright base where mask=255, dark where mask=0
-    result = Image.composite(base, dark, mask)
-
-    # ── Thin text outline for definition ──
     outline = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     outline_draw = ImageDraw.Draw(outline)
     accent_upper = accent_keyword.upper() if accent_keyword else ""
@@ -522,7 +509,6 @@ def _render_thumbnail_text_reveal(frame_bgr, hook_text, accent_keyword=""):
 
         stroke_colour = (255, 255, 255, 190)
         if accent_upper and accent_upper in line:
-            # Accent word gets red outline
             idx = line.find(accent_upper)
             if idx >= 0:
                 before = line[:idx]
@@ -531,37 +517,131 @@ def _render_thumbnail_text_reveal(frame_bgr, hook_text, accent_keyword=""):
                 cur_x = x
                 if before:
                     outline_draw.text(
-                        (cur_x, text_y), before, font=title_font,
-                        fill=(0, 0, 0, 0), stroke_width=2,
-                        stroke_fill=stroke_colour)
-                    cur_x += outline_draw.textbbox(
-                        (0, 0), before, font=title_font)[2]
+                        (cur_x, text_y),
+                        before,
+                        font=title_font,
+                        fill=(0, 0, 0, 0),
+                        stroke_width=2,
+                        stroke_fill=stroke_colour,
+                    )
+                    cur_x += outline_draw.textbbox((0, 0), before, font=title_font)[2]
                 if accent:
                     outline_draw.text(
-                        (cur_x, text_y), accent, font=title_font,
-                        fill=(0, 0, 0, 0), stroke_width=2,
-                        stroke_fill=(*ACCENT_COLOUR[:3], 220))
-                    cur_x += outline_draw.textbbox(
-                        (0, 0), accent, font=title_font)[2]
+                        (cur_x, text_y),
+                        accent,
+                        font=title_font,
+                        fill=(0, 0, 0, 0),
+                        stroke_width=2,
+                        stroke_fill=(*ACCENT_COLOUR[:3], 220),
+                    )
+                    cur_x += outline_draw.textbbox((0, 0), accent, font=title_font)[2]
                 if after:
                     outline_draw.text(
-                        (cur_x, text_y), after, font=title_font,
-                        fill=(0, 0, 0, 0), stroke_width=2,
-                        stroke_fill=stroke_colour)
+                        (cur_x, text_y),
+                        after,
+                        font=title_font,
+                        fill=(0, 0, 0, 0),
+                        stroke_width=2,
+                        stroke_fill=stroke_colour,
+                    )
             else:
                 outline_draw.text(
-                    (x, text_y), line, font=title_font,
-                    fill=(0, 0, 0, 0), stroke_width=2,
-                    stroke_fill=stroke_colour)
+                    (x, text_y),
+                    line,
+                    font=title_font,
+                    fill=(0, 0, 0, 0),
+                    stroke_width=2,
+                    stroke_fill=stroke_colour,
+                )
         else:
             outline_draw.text(
-                (x, text_y), line, font=title_font,
-                fill=(0, 0, 0, 0), stroke_width=2,
-                stroke_fill=stroke_colour)
+                (x, text_y),
+                line,
+                font=title_font,
+                fill=(0, 0, 0, 0),
+                stroke_width=2,
+                stroke_fill=stroke_colour,
+            )
         text_y += line_height
 
-    result = Image.alpha_composite(result, outline)
-    return result
+    return base, dark, mask, outline
+
+
+def _render_thumbnail_text_reveal(frame_bgr, hook_text, accent_keyword=""):
+    """Static track-matte frame used as the title-card thumbnail image."""
+    base, dark, mask, outline = _build_text_reveal_assets(
+        frame_bgr,
+        hook_text,
+        accent_keyword=accent_keyword,
+    )
+    result = Image.composite(base, dark, mask)
+    return Image.alpha_composite(result, outline)
+
+
+def _render_text_reveal_transition_frames(
+    frame_bgr,
+    hook_text,
+    accent_keyword,
+    fps,
+    duration,
+):
+    """Track-matte animation with end zoom/reveal transition.
+
+    Behavior requested:
+    1) Start as black plate with speaker visible only through text.
+    2) Last ~0.5 s: text mask scales up rapidly ("zoom to infinity").
+    3) During that zoom, blend to full-frame frozen speaker image until 100% visible.
+    """
+    h, w = frame_bgr.shape[:2]
+    total_frames = max(1, int(fps * duration))
+    reveal_frames = max(1, int(fps * _TEXT_REVEAL_END_REVEAL_SEC))
+    reveal_start = max(0, total_frames - reveal_frames)
+
+    base, dark, mask, outline = _build_text_reveal_assets(
+        frame_bgr,
+        hook_text,
+        accent_keyword=accent_keyword,
+    )
+
+    frames: list[Image.Image] = []
+    for idx in range(total_frames):
+        if idx < reveal_start:
+            comp = Image.composite(base, dark, mask)
+            comp = Image.alpha_composite(comp, outline)
+            frames.append(comp)
+            continue
+
+        p = (idx - reveal_start) / max(1, reveal_frames - 1)  # 0..1
+
+        # Exponential scale gives the "unlimited" growth feel near the end.
+        scale = 1.0 + (6.0 * (p ** 2.4))
+        sw = max(2, int(w * scale))
+        sh = max(2, int(h * scale))
+
+        scaled_mask = mask.resize((sw, sh), Image.Resampling.BICUBIC)
+        scaled_outline = outline.resize((sw, sh), Image.Resampling.BICUBIC)
+
+        # Re-center scaled assets onto canvas.
+        canvas_mask = Image.new("L", (w, h), 0)
+        canvas_outline = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        ox = (w - sw) // 2
+        oy = (h - sh) // 2
+        canvas_mask.paste(scaled_mask, (ox, oy))
+        canvas_outline.paste(scaled_outline, (ox, oy), scaled_outline)
+
+        # Start with matte composite.
+        comp = Image.composite(base, dark, canvas_mask)
+        comp = Image.alpha_composite(comp, canvas_outline)
+
+        # Blend toward full frame so video becomes 100% visible by the last frame.
+        full_mix_alpha = int(255 * p)
+        full_mix = Image.blend(comp, base, p)
+        if full_mix_alpha >= 255:
+            frames.append(base.copy())
+        else:
+            frames.append(full_mix)
+
+    return frames
 
 
 # ── Style: dramatic ──────────────────────────────────────────────
@@ -685,6 +765,203 @@ def _draw_line_with_accent(draw, x, y, line, accent_word, font, accent_colour):
         draw.text((cur_x, y), after, font=font, fill=(255, 255, 255, 255))
 
 
+# ══════════════════════════════════════════════════════════════════
+#  FANCY TITLE STYLES — frame-by-frame animated titles
+# ══════════════════════════════════════════════════════════════════
+
+def _center_text_layer(width, height, text, font, color=(255, 255, 255)):
+    """Create a transparent RGBA layer with text centred horizontally."""
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    bbox = draw.textbbox((0, 0), text, font=font, stroke_width=3)
+    x = (width - (bbox[2] - bbox[0])) / 2
+    y = height * 0.38
+    draw.text((x, y), text, font=font, fill=color + (255,),
+              stroke_width=3, stroke_fill=(0, 0, 0, 190))
+    return img
+
+
+def _word_sprite(text, font, color=(255, 255, 255)):
+    """Return a tightly-cropped RGBA sprite for one word.
+
+    This avoids full-frame text layers, which caused multi-word kinetic titles
+    to stack at nearly the same location after resizing/rotation.
+    """
+    temp = Image.new("RGBA", (8, 8), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(temp)
+    bbox = draw.textbbox((0, 0), text, font=font, stroke_width=3)
+    tw = max(2, bbox[2] - bbox[0] + 8)
+    th = max(2, bbox[3] - bbox[1] + 8)
+
+    img = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
+    d2 = ImageDraw.Draw(img)
+    d2.text(
+        (4 - bbox[0], 4 - bbox[1]),
+        text,
+        font=font,
+        fill=color + (255,),
+        stroke_width=3,
+        stroke_fill=(0, 0, 0, 190),
+    )
+    return img
+
+
+def _add_vignette(frame_rgb, strength=0.12):
+    """Add a subtle vignette to an RGB ndarray."""
+    h, w = frame_rgb.shape[:2]
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    cx, cy = w / 2.0, h / 2.0
+    max_r = math.hypot(cx, cy)
+    dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+    factor = 1.0 - strength * (dist / max_r) ** 2
+    factor = np.clip(factor, 0, 1)
+    return np.clip(frame_rgb * factor[:, :, np.newaxis], 0, 255).astype(np.uint8)
+
+
+def _rgb_split(frame, offset):
+    """Simple RGB channel-shift glitch."""
+    h, w = frame.shape[:2]
+    result = frame.copy()
+    result[:, max(0, offset):, 0] = frame[:, :w - max(0, offset), 0]  # R right
+    result[:, :w - max(0, offset), 2] = frame[:, max(0, offset):, 2]  # B left
+    return result
+
+
+def _render_fancy_frames(frame_bgr, hook_text, style, fps, duration):
+    """Render a frame-by-frame animated title returning a list of PIL RGBA images.
+
+    *frame_bgr* is the background video frame (BGR ndarray).
+    """
+    h, w = frame_bgr.shape[:2]
+    total_frames = max(1, int(fps * duration))
+
+    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    base_pil = Image.fromarray(frame_rgb).convert("RGBA")
+    # Keep the speaker clearly visible in the title background.
+    # Normal practical range here is alpha 100-170:
+    # - lower = cleaner/brighter frame
+    # - higher = stronger title contrast
+    dark_overlay = Image.new("RGBA", (w, h), (0, 0, 0, 135))
+    dark_base = Image.alpha_composite(base_pil, dark_overlay)
+
+    font_path = _find_font()
+    hook_upper = hook_text.upper()
+
+    frames = []
+    for idx in range(total_frames):
+        p = idx / max(1, total_frames - 1)  # progress 0..1
+        bg = dark_base.copy()
+
+        if style == "kinetic":
+            bg = _render_kinetic_frame(bg, hook_upper, p, w, h, font_path)
+        elif style == "glitch":
+            bg = _render_glitch_frame(bg, hook_upper, p, w, h, font_path)
+        elif style == "neon":
+            bg = _render_neon_frame(bg, hook_upper, p, w, h, font_path)
+        elif style == "distortion":
+            bg = _render_distortion_frame(bg, hook_upper, p, w, h, font_path)
+
+        arr = np.asarray(bg.convert("RGB"), dtype=np.uint8)
+        arr = _add_vignette(arr, 0.12)
+        frames.append(Image.fromarray(arr).convert("RGBA"))
+
+    return frames
+
+
+def _render_kinetic_frame(base, text, p, w, h, font_path):
+    """Kinetic word-by-word pop-in with scale + rotation."""
+    words = text.split()
+    word_font_size = max(40, int(w * _FANCY_FONT_RATIO))
+
+    for idx, word in enumerate(words):
+        local = max(0.0, min(1.0, p * len(words) - idx))
+        if local <= 0.0:
+            continue
+
+        font = (ImageFont.truetype(font_path, word_font_size)
+            if font_path else ImageFont.load_default())
+        layer = _word_sprite(word, font)
+
+        # Scale up with ease-out
+        scale = 0.5 + 0.5 * (1.0 - (1.0 - local) ** 3)
+        new_w = max(2, int(layer.width * scale))
+        new_h = max(2, int(layer.height * scale))
+        layer = layer.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+        # Rotation
+        rot = (idx - len(words) / 2) * 6.0 * (1.0 - local)
+        layer = layer.rotate(rot, expand=True, resample=Image.Resampling.BICUBIC)
+
+        # Spread words across vertical lanes to avoid same-position stacking.
+        # For two-word hooks this lands naturally on line-1 and line-2.
+        if len(words) == 2:
+            lane_ratios = [0.38, 0.62]
+            y_center = h * lane_ratios[idx]
+        else:
+            y_center = h * (0.26 + idx * min(0.11, 0.48 / max(len(words), 1)))
+        x = int(w * 0.5 - layer.width / 2)
+        y = int(y_center - layer.height / 2)
+        base.alpha_composite(layer, (max(0, x), max(0, y)))
+
+    return base
+
+
+def _render_glitch_frame(base, text, p, w, h, font_path):
+    """RGB split + noise glitch effect."""
+    font_size = max(48, int(w * _FANCY_FONT_RATIO))
+    font = (ImageFont.truetype(font_path, font_size)
+            if font_path else ImageFont.load_default())
+    layer = _center_text_layer(w, h, text, font)
+
+    arr = np.asarray(layer.convert("RGB"), dtype=np.uint8)
+    offset = max(2, int(2 + 8 * (0.5 + 0.5 * math.sin(p * math.pi * 6.0))))
+    arr = _rgb_split(arr, offset)
+
+    # Add noise
+    rng = np.random.RandomState(int(p * 999) + 7)
+    noise = rng.randint(0, 30, arr.shape, dtype=np.uint8)
+    arr = np.clip(arr.astype(np.int16) + noise.astype(np.int16), 0, 255).astype(np.uint8)
+
+    layer = Image.fromarray(arr, mode="RGB").convert("RGBA")
+    base.alpha_composite(layer)
+    return base
+
+
+def _render_neon_frame(base, text, p, w, h, font_path):
+    """Neon glow bloom effect with cycling color."""
+    font_size = max(48, int(w * _FANCY_FONT_RATIO))
+    font = (ImageFont.truetype(font_path, font_size)
+            if font_path else ImageFont.load_default())
+    color = (70, 255, 220)
+    layer = _center_text_layer(w, h, text, font, color=color)
+
+    # Double gaussian glow
+    glow = layer.filter(ImageFilter.GaussianBlur(radius=18))
+    glow2 = layer.filter(ImageFilter.GaussianBlur(radius=8))
+    base.alpha_composite(glow)
+    base.alpha_composite(glow2)
+    base.alpha_composite(layer)
+    return base
+
+
+def _render_distortion_frame(base, text, p, w, h, font_path):
+    """Sine-wave distortion of text."""
+    font_size = max(46, int(w * _FANCY_FONT_RATIO))
+    font = (ImageFont.truetype(font_path, font_size)
+            if font_path else ImageFont.load_default())
+    layer = _center_text_layer(w, h, text, font)
+
+    arr = np.asarray(layer.convert("RGB"), dtype=np.uint8)
+    lh, lw = arr.shape[:2]
+    yy, xx = np.indices((lh, lw), dtype=np.float32)
+    map_x = xx + 12.0 * np.sin(yy / 18.0 + p * 6.0)
+    map_y = yy
+    arr = cv2.remap(arr, map_x, map_y, interpolation=cv2.INTER_LINEAR,
+                    borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+    base.alpha_composite(Image.fromarray(arr, mode="RGB").convert("RGBA"))
+    return base
+
+
 def generate_thumbnail_card(
     video_path,
     hook_text,
@@ -732,53 +1009,177 @@ def generate_thumbnail_card(
     # Resolve the actual style name before rendering
     resolved_style = style
     if style in ("random", "auto"):
-        # Pre-resolve so we can report which style was used
         if style == "random":
-            resolved_style = random.choice(THUMBNAIL_STYLES)
+            resolved_style = random.choice(ALL_STYLES)
         else:
             face_box = _detect_face_box(frame)
             if face_box is not None:
                 _, _, fw, fh = face_box
                 if (fw * fh) / (w_frame * h_frame) > 0.04:
-                    resolved_style = random.choice(THUMBNAIL_STYLES)
+                    resolved_style = random.choice(ALL_STYLES)
                 else:
-                    resolved_style = random.choice(("classic", "dramatic"))
+                    resolved_style = random.choice(("classic", "dramatic") + FANCY_STYLES)
             else:
-                resolved_style = random.choice(("classic", "dramatic"))
+                resolved_style = random.choice(("classic", "dramatic") + FANCY_STYLES)
 
-    img = _render_thumbnail(frame, hook_text, accent_keyword,
-                            style=resolved_style)
-
-    # ── Export standalone thumbnail image (Ergänzung 1) ──
+    # ── Export standalone thumbnail image ──
     if thumbnail_image_path is None:
         base = os.path.splitext(os.path.basename(video_path))[0]
         thumbnail_image_path = os.path.join(
             os.path.dirname(video_path), f"{base}_thumb.jpg"
         )
-    img.convert("RGB").save(thumbnail_image_path, "JPEG", quality=92)
-
-    # Write as PNG for FFmpeg input (lossless intermediate)
-    tmp_dir = tempfile.mkdtemp(prefix="thumbnail_")
-    png_path = os.path.join(tmp_dir, "thumb.png")
-    img.convert("RGB").save(png_path)
 
     if output_path is None:
         output_path = os.path.join(
             os.path.dirname(video_path), "_thumbnail.mp4"
         )
 
-    # Very subtle 1.2% push-in zoom + fade-out last 0.2s (NO fade-in so
-    # frame 0 = clean thumbnail — platforms pick it as cover image).
-    zoom_expr = (
-        f"zoompan="
-        f"z='1+0.012*on/{total_frames}':"
-        f"x='iw/2-(iw/zoom/2)':"
-        f"y='ih/2-(ih/zoom/2)':"
-        f"d={total_frames}:"
-        f"s={w_frame}x{h_frame}:"
-        f"fps={fps},"
-        f"fade=t=out:st={duration - 0.20}:d=0.20"
-    )
+    tmp_dir = tempfile.mkdtemp(prefix="thumbnail_")
+
+    # ── Fancy styles: frame-by-frame rendering ──
+    if resolved_style in FANCY_STYLES:
+        fancy_frames = _render_fancy_frames(
+            frame, hook_text, resolved_style, fps, duration
+        )
+        # Save first frame as thumbnail image
+        fancy_frames[0].convert("RGB").save(thumbnail_image_path, "JPEG", quality=92)
+
+        # Write PNG sequence
+        for i, fr in enumerate(fancy_frames):
+            fr.convert("RGB").save(os.path.join(tmp_dir, f"frame_{i:04d}.png"))
+
+        print(f"  Title card style: {resolved_style} ({len(fancy_frames)} frames)")
+
+        cmd = [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-framerate", str(fps),
+            "-i", os.path.join(tmp_dir, "frame_%04d.png"),
+            "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+            "-vf", f"fade=t=out:st={duration - 0.20}:d=0.20",
+            "-t", str(duration),
+            *NVENC_FLAGS,
+            "-c:a", "aac", "-b:a", "128k",
+            output_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"FFmpeg fancy title generation failed:\n{result.stderr}"
+            )
+
+        # Cleanup
+        try:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        except OSError:
+            pass
+
+        return output_path, thumbnail_image_path, resolved_style
+
+    # ── Track-matte style: frame-by-frame end reveal zoom ──
+    if resolved_style == "text_reveal":
+        reveal_frames = _render_text_reveal_transition_frames(
+            frame,
+            hook_text,
+            accent_keyword,
+            fps,
+            duration,
+        )
+        reveal_frames[0].convert("RGB").save(thumbnail_image_path, "JPEG", quality=92)
+
+        for i, fr in enumerate(reveal_frames):
+            fr.convert("RGB").save(os.path.join(tmp_dir, f"frame_{i:04d}.png"))
+
+        print(
+            "  Title card style: text_reveal "
+            f"({len(reveal_frames)} frames, end reveal {_TEXT_REVEAL_END_REVEAL_SEC:.2f}s)"
+        )
+
+        cmd = [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-framerate", str(fps),
+            "-i", os.path.join(tmp_dir, "frame_%04d.png"),
+            "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+            "-t", str(duration),
+            *NVENC_FLAGS,
+            "-c:a", "aac", "-b:a", "128k",
+            output_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"FFmpeg text-reveal transition generation failed:\n{result.stderr}"
+            )
+
+        try:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        except OSError:
+            pass
+
+        return output_path, thumbnail_image_path, resolved_style
+
+    # ── Classic / text_reveal / dramatic: single-frame + zoompan ──
+    img = _render_thumbnail(frame, hook_text, accent_keyword,
+                            style=resolved_style)
+
+    img.convert("RGB").save(thumbnail_image_path, "JPEG", quality=92)
+
+    png_path = os.path.join(tmp_dir, "thumb.png")
+    img.convert("RGB").save(png_path)
+
+    # Random motion effect for visual energy (NO fade-in so frame 0
+    # = clean thumbnail for platform cover images).
+    motion_style = random.choice(["shake", "zoom_pulse", "drift", "push_in"])
+    if motion_style == "shake":
+        # Quick horizontal/vertical shake — 8 Hz, ±12 px
+        zoom_expr = (
+            f"zoompan="
+            f"z='1.03':"
+            f"x='iw/2-(iw/zoom/2)+12*sin(on*8*2*PI/{total_frames})':"
+            f"y='ih/2-(ih/zoom/2)+8*cos(on*11*2*PI/{total_frames})':"
+            f"d={total_frames}:"
+            f"s={w_frame}x{h_frame}:"
+            f"fps={fps},"
+            f"fade=t=out:st={duration - 0.20}:d=0.20"
+        )
+    elif motion_style == "zoom_pulse":
+        # Zoom from 1.0 → 1.08 with a fast ease-out
+        zoom_expr = (
+            f"zoompan="
+            f"z='1+0.08*(1-pow(1-on/{total_frames},3))':"
+            f"x='iw/2-(iw/zoom/2)':"
+            f"y='ih/2-(ih/zoom/2)':"
+            f"d={total_frames}:"
+            f"s={w_frame}x{h_frame}:"
+            f"fps={fps},"
+            f"fade=t=out:st={duration - 0.20}:d=0.20"
+        )
+    elif motion_style == "drift":
+        # Slow diagonal drift — moves ~20 px total
+        zoom_expr = (
+            f"zoompan="
+            f"z='1.04':"
+            f"x='iw/2-(iw/zoom/2)+20*on/{total_frames}':"
+            f"y='ih/2-(ih/zoom/2)-15*on/{total_frames}':"
+            f"d={total_frames}:"
+            f"s={w_frame}x{h_frame}:"
+            f"fps={fps},"
+            f"fade=t=out:st={duration - 0.20}:d=0.20"
+        )
+    else:
+        # push_in: original subtle 1.2% push-in zoom
+        zoom_expr = (
+            f"zoompan="
+            f"z='1+0.012*on/{total_frames}':"
+            f"x='iw/2-(iw/zoom/2)':"
+            f"y='ih/2-(ih/zoom/2)':"
+            f"d={total_frames}:"
+            f"s={w_frame}x{h_frame}:"
+            f"fps={fps},"
+            f"fade=t=out:st={duration - 0.20}:d=0.20"
+        )
+    print(f"  Title card motion: {motion_style}")
 
     cmd = [
         "ffmpeg", "-y", "-loglevel", "error",
@@ -800,8 +1201,8 @@ def generate_thumbnail_card(
 
     # Cleanup
     try:
-        os.remove(png_path)
-        os.rmdir(tmp_dir)
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
     except OSError:
         pass
 

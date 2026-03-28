@@ -3,6 +3,11 @@ import torch
 import os
 import numpy as np
 
+try:
+    from Components.TranscriptionData import build_transcription_payload
+except ImportError:  # pragma: no cover - direct script execution fallback
+    from TranscriptionData import build_transcription_payload
+
 # Keep model reference at module level to prevent premature GC/segfault
 _model_ref = None
 
@@ -91,7 +96,31 @@ def _detect_audience_reactions(audio_path, speech_segments):
     return reactions
 
 
-def transcribeAudio(audio_path):
+def _extract_word_timestamps(segments):
+    word_timestamps = []
+
+    for segment in segments:
+        words = segment.words if hasattr(segment, 'words') and segment.words else None
+        if not words:
+            continue
+
+        for word in words:
+            try:
+                start = float(word.start)
+                end = float(word.end)
+            except (AttributeError, TypeError, ValueError):
+                continue
+
+            text = (getattr(word, "word", "") or "").strip()
+            if not text:
+                continue
+
+            word_timestamps.append({"text": text, "start": start, "end": end})
+
+    return word_timestamps
+
+
+def transcribeAudioDetailed(audio_path):
     global _model_ref
     try:
         print("Transcribing audio...")
@@ -117,6 +146,7 @@ def transcribeAudio(audio_path):
             ),
         )
         segments = list(segments)
+        word_timestamps = _extract_word_timestamps(segments)
 
         # Split long segments using word-level timestamps at pause boundaries.
         # Whisper with VAD can produce very long segments that merge multiple
@@ -168,12 +198,16 @@ def transcribeAudio(audio_path):
 
         # Keep model alive at module level — ctranslate2 segfaults on CUDA cleanup
         _model_ref = model
-        return all_segments
+        return build_transcription_payload(all_segments, word_timestamps)
     except Exception as e:
         print("Transcription Error:", e)
         import traceback
         traceback.print_exc()
-        return []
+        return build_transcription_payload([], [])
+
+
+def transcribeAudio(audio_path):
+    return transcribeAudioDetailed(audio_path).get("segments", [])
 
 if __name__ == "__main__":
     audio_path = "audio.wav"

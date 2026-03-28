@@ -19,11 +19,11 @@ BOX_COLOUR = "&HCC000000"         # 80% transparent black box
 HARD_PUNCT = {".", "?", "!"}
 SOFT_PUNCT = {",", ";", ":"}
 MIN_WORDS_BEFORE_SOFT_BREAK = 4
-MIN_PHRASE_DURATION = 0.10
-MAX_PHRASE_DURATION = 1.0
+MIN_PHRASE_DURATION = 0.4
+MAX_PHRASE_DURATION = 1.6
 MAX_PHRASE_WORDS = MAX_WORDS_PER_PHRASE
 MIN_PHRASE_WORDS = 1
-HOLD_AFTER_PHRASE_SEC = 0.03
+HOLD_AFTER_PHRASE_SEC = 0.05
 MIN_WORD_DISPLAY_SEC = 0.02   # minimum time each word stays highlighted
 
 # Stable wrapping defaults
@@ -325,6 +325,52 @@ def _read_video_metadata(video_path):
     return width, height, duration
 
 
+def _starts_mid_segment(transcriptions, subtitle_start_time):
+    for text, start, end in transcriptions or []:
+        stripped = str(text or "").strip()
+        if not stripped or stripped.startswith("["):
+            continue
+        if float(start) < float(subtitle_start_time) < float(end):
+            return True
+    return False
+
+
+def _leading_alpha(text):
+    for ch in str(text or "").lstrip("\"'([{„‚«»"):
+        if ch.isalpha():
+            return ch
+    return ""
+
+
+def _drop_leading_partial_phrase(phrases, *, subtitle_start_time, transcriptions):
+    if len(phrases) <= 1:
+        return phrases
+    if not _starts_mid_segment(transcriptions, subtitle_start_time):
+        return phrases
+
+    first_phrase = phrases[0]
+    if not first_phrase:
+        return phrases[1:]
+
+    first_word = first_phrase[0]
+    first_alpha = _leading_alpha(first_word.get("text", ""))
+    starts_lowercase = (
+        bool(first_alpha)
+        and first_alpha == first_alpha.lower()
+        and first_alpha != first_alpha.upper()
+    )
+    starts_immediately = float(first_word.get("start", 0.0)) <= 0.35
+    short_phrase = len(first_phrase) <= 2 or _phrase_duration(first_phrase) <= 0.8
+
+    if starts_immediately and short_phrase and starts_lowercase:
+        dropped_text = " ".join(w.get("text", "").strip() for w in first_phrase).strip()
+        if dropped_text:
+            print(f"[Subtitles] Dropping orphan opening phrase: {dropped_text}")
+        return phrases[1:]
+
+    return phrases
+
+
 def _build_phrase_layout_metadata(phrase):
     plain_words = [w["text"] for w in phrase][:MAX_WORDS_PER_PHRASE]
     wrapped_lines = wrap_phrase_words(plain_words)
@@ -417,7 +463,7 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
     font_size = max(33, int(video_height * 0.053) - 2)
 
     # keep captions clearly in lower third and away from center
-    margin_v = max(190, int(video_height * 0.21))
+    margin_v = max(190, int(video_height * 0.19))
     margin_h = max(70, int(video_width * 0.10))
 
     outline = max(3, int(video_height * 0.0035))
@@ -491,7 +537,14 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
         handle.write("\n".join(lines) + "\n")
 
 
-def _build_word_events(word_timestamps, video_start_time, video_duration):
+def _build_word_events(
+    word_timestamps,
+    video_start_time,
+    video_duration,
+    *,
+    transcriptions=None,
+    trim_leading_partial_phrase=False,
+):
     adjusted = []
     dropped = 0
     for w in word_timestamps:
@@ -526,11 +579,19 @@ def _build_word_events(word_timestamps, video_start_time, video_duration):
     if not adjusted:
         return []
 
-    return segment_words_into_phrases(adjusted)
+    phrases = segment_words_into_phrases(adjusted)
+    if trim_leading_partial_phrase:
+        phrases = _drop_leading_partial_phrase(
+            phrases,
+            subtitle_start_time=video_start_time,
+            transcriptions=transcriptions,
+        )
+    return phrases
 
 
 def add_subtitles_to_video(input_video, output_video, transcriptions,
                            video_start_time=0, word_timestamps=None,
+                           trim_leading_partial_phrase=False,
                            extra_vf=""):
     input_video = os.path.abspath(input_video)
     output_video = os.path.abspath(output_video)
@@ -543,6 +604,8 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
             word_timestamps,
             video_start_time,
             video_duration,
+            transcriptions=transcriptions,
+            trim_leading_partial_phrase=trim_leading_partial_phrase,
         )
 
     relevant_transcriptions = []

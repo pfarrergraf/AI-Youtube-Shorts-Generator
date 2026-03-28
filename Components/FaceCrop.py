@@ -94,15 +94,9 @@ def _configure_dnn_backend(net):
 
 
 def _ease_in_out(t):
-    """Smooth ease-in-out curve (Hermite / smoothstep)."""
+    """Smooth pan interpolation only; jump cuts remain instantaneous."""
     t = max(0.0, min(1.0, t))
     return t * t * (3.0 - 2.0 * t)
-
-
-def _ease_out(t):
-    """Deceleration curve — fast start, gentle stop."""
-    t = max(0.0, min(1.0, t))
-    return 1.0 - (1.0 - t) ** 3
 
 
 # ======================================================================
@@ -111,20 +105,17 @@ def _ease_out(t):
 # Each effect is (type, start_frame, end_frame, params_dict)
 #
 # Types:
-#   "slow_push"   — cinematic slow zoom toward the face over several seconds
-#   "slow_pull"   — slow zoom out back to normal over several seconds
 #   "jump_close"  — instant jump cut to a close-up (held steady, no movement)
-#   "jump_mid"    — instant jump cut to a mid-shot (moderate zoom, held steady)
-#   "drift"       — slow horizontal Ken Burns drift with slight zoom
+#   "jump_mid"    — instant jump cut to a mid-shot (held steady, no movement)
 # ======================================================================
 
 def _plan_camera_effects(total_frames, fps):
-    """Plan a sequence of camera effects spread across the clip."""
+    """Plan a sequence of attention-grabbing jump cuts across the clip."""
     duration_sec = total_frames / fps
     effects = []
 
     # Minimum gap (in frames) between effects
-    min_gap = int(fps * 2.0)
+    min_gap = int(fps * 1.2)
     # Don't place effects in first or last 1.5s
     margin = int(fps * 1.5)
     safe_start = margin
@@ -133,48 +124,24 @@ def _plan_camera_effects(total_frames, fps):
     if safe_end - safe_start < int(fps * 4):
         return []  # clip too short for effects
 
-    # Build a pool of candidate effects
+    # Build a pool of jump-cut candidates.
     candidates = []
 
-    # --- Slow push-ins: 3-5 seconds, zoom 1.0 → 1.15–1.25 ---
-    push_dur = random.uniform(3.0, 5.0)
-    push_frames = int(push_dur * fps)
-    candidates.append(("slow_push", push_frames, {"zoom_end": random.uniform(1.15, 1.25)}))
+    for _ in range(4):
+        close_dur = random.uniform(1.6, 3.0)
+        close_frames = int(close_dur * fps)
+        candidates.append(("jump_close", close_frames, {"zoom": random.uniform(1.28, 1.45)}))
 
-    # --- Slow pull-outs: 2-4 seconds, zoom 1.20 → 1.0 ---
-    pull_dur = random.uniform(2.0, 4.0)
-    pull_frames = int(pull_dur * fps)
-    candidates.append(("slow_pull", pull_frames, {"zoom_start": random.uniform(1.15, 1.22)}))
-
-    # --- Jump cut close-ups: instant zoom held for 2-4 seconds ---
-    close_dur = random.uniform(2.0, 4.0)
-    close_frames = int(close_dur * fps)
-    candidates.append(("jump_close", close_frames, {"zoom": random.uniform(1.30, 1.50)}))
-
-    # --- Jump cut mid-shots: instant moderate zoom held for 1.5-3 seconds ---
-    mid_dur = random.uniform(1.5, 3.0)
-    mid_frames = int(mid_dur * fps)
-    candidates.append(("jump_mid", mid_frames, {"zoom": random.uniform(1.12, 1.22)}))
-
-    # --- Ken Burns drift: slow horizontal pan + slight zoom, 4-6 seconds ---
-    drift_dur = random.uniform(4.0, 6.0)
-    drift_frames = int(drift_dur * fps)
-    drift_dir = random.choice([-1, 1])
-    candidates.append(("drift", drift_frames, {
-        "zoom": random.uniform(1.05, 1.12),
-        "drift_px": drift_dir * random.randint(20, 60),
-    }))
-
-    # For a second slow push (different params)
-    push_dur2 = random.uniform(3.0, 4.5)
-    push_frames2 = int(push_dur2 * fps)
-    candidates.append(("slow_push", push_frames2, {"zoom_end": random.uniform(1.12, 1.20)}))
+    for _ in range(4):
+        mid_dur = random.uniform(1.2, 2.4)
+        mid_frames = int(mid_dur * fps)
+        candidates.append(("jump_mid", mid_frames, {"zoom": random.uniform(1.10, 1.22)}))
 
     # Shuffle and place without overlaps
     random.shuffle(candidates)
 
-    # Determine how many effects to place (~1 every 6-10 seconds)
-    max_effects = max(1, int(duration_sec / random.uniform(6, 10)))
+    # Determine how many cuts to place (~1 every 4-6 seconds)
+    max_effects = max(1, int(duration_sec / random.uniform(4, 6)))
     placed_ranges = []  # list of (start, end) already used
 
     for etype, edur, eparams in candidates:
@@ -202,7 +169,8 @@ def _plan_camera_effects(total_frames, fps):
 
 
 def _apply_zoom_crop(frame, x_pos, zoom, vertical_width, vertical_height,
-                     original_width, original_height, x_offset=0):
+                     original_width, original_height, x_offset=0,
+                     out_w=None, out_h=None):
     """Crop a zoomed region centered on face position, return resized to output dims."""
     crop_w = int(vertical_width / zoom)
     crop_h = int(vertical_height / zoom)
@@ -215,11 +183,18 @@ def _apply_zoom_crop(frame, x_pos, zoom, vertical_width, vertical_height,
     zy = max(0, min(zy, original_height - crop_h))
 
     cropped = frame[zy:zy + crop_h, zx:zx + crop_w]
-    return cv2.resize(cropped, (vertical_width, vertical_height), interpolation=cv2.INTER_LANCZOS4)
+    rw = out_w if out_w else vertical_width
+    rh = out_h if out_h else vertical_height
+    return cv2.resize(cropped, (rw, rh), interpolation=cv2.INTER_LANCZOS4)
 
 
-def crop_to_vertical(input_video_path, output_video_path):
+def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=True,
+                     target_height=1920):
     """Crop video to vertical 9:16 format with professional camera tracking and effects.
+
+    Face tracking runs at native resolution for accuracy.  The final output is
+    always scaled to *target_height* (default 1920) with a 9:16 aspect ratio,
+    i.e. 1080x1920 by default.
 
     Returns:
         list of (etype, start_sec, end_sec) tuples describing camera effects,
@@ -250,11 +225,18 @@ def crop_to_vertical(input_video_path, output_video_path):
         fps = 30.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+    # Native crop dimensions (face tracking at source resolution)
     vertical_height = original_height
     vertical_width = int(vertical_height * 9 / 16)
     vertical_width = vertical_width - (vertical_width % 2)
     vertical_height = vertical_height - (vertical_height % 2)
-    print(f"Output dimensions: {vertical_width}x{vertical_height}")
+
+    # Final output dimensions (always target_height, 9:16)
+    out_h = int(target_height)
+    out_w = int(out_h * 9 / 16)
+    out_w = out_w - (out_w % 2)
+    out_h = out_h - (out_h % 2)
+    print(f"Output dimensions: {out_w}x{out_h} (native crop: {vertical_width}x{vertical_height})")
 
     if original_width < vertical_width:
         print("Error: Original video width is less than the desired vertical width.")
@@ -343,7 +325,7 @@ def crop_to_vertical(input_video_path, output_video_path):
     # ------------------------------------------------------------------
     # Plan camera effects
     # ------------------------------------------------------------------
-    effects = _plan_camera_effects(total_frames, fps)
+    effects = _plan_camera_effects(total_frames, fps) if enable_camera_effects else []
     if effects:
         labels = []
         for etype, es, ee, _ in effects:
@@ -351,17 +333,19 @@ def crop_to_vertical(input_video_path, output_video_path):
             t_end = ee / fps
             labels.append(f"    {etype} @ {t_start:.1f}s–{t_end:.1f}s")
         print(f"  Planned {len(effects)} camera effects:\n" + "\n".join(labels))
-    else:
+    elif enable_camera_effects:
         print("  No camera effects (clip too short)")
+    else:
+        print("  Camera effects disabled for this render stage")
 
     # ------------------------------------------------------------------
     # PASS 2: Write frames with tracking + effects
     # ------------------------------------------------------------------
-    print("Pass 2/2: Writing cropped video with camera effects...")
+    print("Pass 2/2: Writing cropped video...")
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     print("  Encoding cropped video with FFmpeg NVENC...")
-    writer = _start_nvenc_writer(output_video_path, vertical_width, vertical_height, fps)
+    writer = _start_nvenc_writer(output_video_path, out_w, out_h, fps)
 
     frame_count = 0
     while True:
@@ -380,79 +364,38 @@ def crop_to_vertical(input_video_path, output_video_path):
 
         if active_effect:
             etype, es, ee, eparams = active_effect
-            progress = (frame_count - es) / max(ee - es, 1)
 
-            if etype == "slow_push":
-                # Cinematic slow zoom toward the face
-                zoom = 1.0 + (eparams["zoom_end"] - 1.0) * _ease_in_out(progress)
-                cropped = _apply_zoom_crop(frame, x_pos, zoom,
-                                           vertical_width, vertical_height,
-                                           original_width, original_height)
-
-            elif etype == "slow_pull":
-                # Slow zoom out from close to normal
-                zoom_start = eparams["zoom_start"]
-                zoom = zoom_start + (1.0 - zoom_start) * _ease_in_out(progress)
-                cropped = _apply_zoom_crop(frame, x_pos, zoom,
-                                           vertical_width, vertical_height,
-                                           original_width, original_height)
-
-            elif etype == "jump_close":
-                # Jump to close-up with smooth ease-in/out over 6 frames
+            if etype == "jump_close":
+                # Hold an instant close-up — no ramp, no slow zoom.
                 zoom_target = eparams["zoom"]
-                ramp = min(6, (ee - es) // 4)
-                if ramp > 0 and (frame_count - es) < ramp:
-                    t = _ease_in_out((frame_count - es) / ramp)
-                    zoom = 1.0 + (zoom_target - 1.0) * t
-                elif ramp > 0 and (ee - frame_count) < ramp:
-                    t = _ease_in_out((ee - frame_count) / ramp)
-                    zoom = 1.0 + (zoom_target - 1.0) * t
-                else:
-                    zoom = zoom_target
-                cropped = _apply_zoom_crop(frame, x_pos, zoom,
-                                           vertical_width, vertical_height,
-                                           original_width, original_height)
-
-            elif etype == "jump_mid":
-                # Jump to mid-shot with smooth ease-in/out over 6 frames
-                zoom_target = eparams["zoom"]
-                ramp = min(6, (ee - es) // 4)
-                if ramp > 0 and (frame_count - es) < ramp:
-                    t = _ease_in_out((frame_count - es) / ramp)
-                    zoom = 1.0 + (zoom_target - 1.0) * t
-                elif ramp > 0 and (ee - frame_count) < ramp:
-                    t = _ease_in_out((ee - frame_count) / ramp)
-                    zoom = 1.0 + (zoom_target - 1.0) * t
-                else:
-                    zoom = zoom_target
-                cropped = _apply_zoom_crop(frame, x_pos, zoom,
-                                           vertical_width, vertical_height,
-                                           original_width, original_height)
-
-            elif etype == "drift":
-                # Ken Burns: slow horizontal drift with slight zoom
-                zoom = eparams["zoom"]
-                drift_px = eparams["drift_px"]
-                offset = int(drift_px * _ease_in_out(progress))
-                cropped = _apply_zoom_crop(frame, x_pos, zoom,
+                cropped = _apply_zoom_crop(frame, x_pos, zoom_target,
                                            vertical_width, vertical_height,
                                            original_width, original_height,
-                                           x_offset=offset)
+                                           out_w=out_w, out_h=out_h)
+
+            elif etype == "jump_mid":
+                # Hold an instant mid-shot — no ramp, no slow zoom.
+                zoom_target = eparams["zoom"]
+                cropped = _apply_zoom_crop(frame, x_pos, zoom_target,
+                                           vertical_width, vertical_height,
+                                           original_width, original_height,
+                                           out_w=out_w, out_h=out_h)
             else:
                 # Fallback: normal crop
                 x_start = max(0, min(x_pos, original_width - vertical_width))
                 cropped = frame[:, x_start:x_start + vertical_width]
+                cropped = cv2.resize(cropped, (out_w, out_h),
+                                     interpolation=cv2.INTER_LANCZOS4)
         else:
             # Normal tracking — no effect active
             x_start = max(0, min(x_pos, original_width - vertical_width))
             cropped = frame[:, x_start:x_start + vertical_width]
-            if cropped.shape[0] != vertical_height or cropped.shape[1] != vertical_width:
-                cropped = cv2.resize(cropped, (vertical_width, vertical_height),
-                                     interpolation=cv2.INTER_LANCZOS4)
+            cropped = cv2.resize(cropped, (out_w, out_h),
+                                 interpolation=cv2.INTER_LANCZOS4)
 
         # Safety: ensure frame matches writer dimensions
-        if cropped.shape[1] != vertical_width or cropped.shape[0] != vertical_height:
-            cropped = cv2.resize(cropped, (vertical_width, vertical_height),
+        if cropped.shape[1] != out_w or cropped.shape[0] != out_h:
+            cropped = cv2.resize(cropped, (out_w, out_h),
                                  interpolation=cv2.INTER_LANCZOS4)
         cropped = np.ascontiguousarray(cropped)
         if writer.stdin is None:
@@ -572,6 +515,3 @@ if __name__ == "__main__":
     final_video_path = 'final_video_with_audio.mp4'
     crop_to_vertical(input_video_path, output_video_path)
     combine_videos(input_video_path, output_video_path, final_video_path)
-
-
-

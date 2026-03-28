@@ -52,6 +52,8 @@ EVENT_TO_SFX = {
     "emphasis": "punch",
     "dramatic_hit": "impact_strong",
     "title_to_video_transition": "vacuum_transition",
+    "lower_third_in": "whoosh_soft",
+    "lower_third_out": "whoosh_soft",
 }
 
 SFX_BEHAVIOR = {
@@ -69,17 +71,17 @@ SFX_BEHAVIOR = {
 }
 
 SFX_GAIN = {
-    "pop": -18.0,
-    "click": -20.0,
-    "whoosh_soft": -18.0,
-    "whoosh_strong": -16.0,
+    "pop": -16.0,
+    "click": -16.0,
+    "whoosh_soft": -14.0,
+    "whoosh_strong": -14.0,
     "whoosh_heavy": -14.0,
-    "whoosh_transition": -20.0,
-    "vacuum_turn": -17.0,
+    "whoosh_transition": -14.0,
+    "vacuum_turn": -15.0,
     "vacuum_transition": -15.0,
-    "impact_soft": -18.0,
-    "impact_strong": -14.0,
-    "punch": -16.0,
+    "impact_soft": -14.0,
+    "impact_strong": -11.0,
+    "punch": -14.0,
 }
 
 SFX_PROFILE_OVERRIDES = {
@@ -104,6 +106,8 @@ SFX_PROFILE_OVERRIDES = {
             "keyword_pop",
             "emphasis",
             "title_to_video_transition",
+            "lower_third_in",
+            "lower_third_out",
         },
         "gain_adjust_db": 0.0,
     },
@@ -132,13 +136,22 @@ EVENT_COOLDOWNS_SEC = {
     "reframe": 0.8,
     "jump_cut": 0.33,
     "scene_transition": 2.0,
-    "hard_transition": 1.0,
+    "hard_transition": 0.0,
     "hook_in": 2.0,
     "hook_hit": 1.2,
     "keyword_pop": 0.5,
     "emphasis": 0.7,
     "dramatic_hit": 2.5,
     "title_to_video_transition": 3.0,
+    "lower_third_in": 2.0,
+    "lower_third_out": 2.0,
+}
+
+# Per-event gain overrides (dB). Takes precedence over SFX_GAIN for the
+# resolved SFX type whenever these events are rendered.
+EVENT_GAIN_OVERRIDE = {
+    "lower_third_in": -7.0,
+    "lower_third_out": -7.0,
 }
 
 DEFAULT_SFX_DIR_CANDIDATES = [
@@ -201,8 +214,12 @@ def _is_event_enabled(event_name: str, profile: str) -> bool:
 
 
 def _get_effective_gain_db(event_name: str, profile: str) -> float:
-    sfx_type = EVENT_TO_SFX[event_name]
-    base_gain = SFX_GAIN.get(sfx_type, -18.0)
+    # Per-event override takes precedence (e.g. lower_third_in at -7dB)
+    if event_name in EVENT_GAIN_OVERRIDE:
+        base_gain = EVENT_GAIN_OVERRIDE[event_name]
+    else:
+        sfx_type = EVENT_TO_SFX[event_name]
+        base_gain = SFX_GAIN.get(sfx_type, -18.0)
     profile_adjust = float(_get_profile_config(profile).get("gain_adjust_db", 0.0))
     return base_gain + profile_adjust
 

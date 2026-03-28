@@ -23,11 +23,78 @@ NVENC_FLAGS = [
 ]
 
 
+HWACCEL_FLAGS = [
+    "-hwaccel",
+    "cuda",
+]
+
+
 def _run_ffmpeg(command, description):
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
         stderr = (result.stderr or "").strip()
         raise RuntimeError(f"{description} failed: {stderr}")
+
+
+def _probe_input_video_codec(input_file):
+    command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=codec_name",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        input_file,
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        return ""
+    return (result.stdout or "").strip().lower()
+
+
+def _build_crop_command(input_file, output_file, start_time, duration, *, use_hwaccel):
+    command = [
+        "ffmpeg",
+        "-y",
+        "-loglevel",
+        "error",
+    ]
+    if use_hwaccel:
+        command.extend(HWACCEL_FLAGS)
+    command.extend(
+        [
+            "-ss",
+            f"{start_time:.3f}",
+            "-i",
+            input_file,
+            "-t",
+            f"{duration:.3f}",
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            *NVENC_FLAGS,
+            "-c:a",
+            "aac",
+            output_file,
+        ]
+    )
+    return command
+
+
+def _is_hwaccel_decode_error(message):
+    lowered = str(message).lower()
+    needles = (
+        "no device available for decoder",
+        "hardware device setup failed for decoder",
+        "device type cuda needed for codec",
+        "failed setup for decoder",
+        "hardware accelerated av1 decoding",
+    )
+    return any(needle in lowered for needle in needles)
 
 
 def extractAudio(video_path, audio_path="audio.wav"):
@@ -58,30 +125,33 @@ def crop_video(input_file, output_file, start_time, end_time):
         )
 
     duration = end_time - start_time
-    command = [
-        "ffmpeg",
-        "-y",
-        "-loglevel",
-        "error",
-        "-hwaccel",
-        "cuda",
-        "-ss",
-        f"{start_time:.3f}",
-        "-i",
+    codec_name = _probe_input_video_codec(input_file)
+    use_hwaccel = codec_name != "av1"
+    command = _build_crop_command(
         input_file,
-        "-t",
-        f"{duration:.3f}",
-        "-map",
-        "0:v:0",
-        "-map",
-        "0:a?",
-        *NVENC_FLAGS,
-        "-c:a",
-        "aac",
         output_file,
-    ]
+        start_time,
+        duration,
+        use_hwaccel=use_hwaccel,
+    )
     print("  Trimming clip with FFmpeg NVENC...")
-    _run_ffmpeg(command, "clip extraction")
+    if not use_hwaccel and codec_name:
+        print(f"  Input codec {codec_name}: using software decode for clip extraction.")
+    try:
+        _run_ffmpeg(command, "clip extraction")
+    except RuntimeError as exc:
+        if use_hwaccel and _is_hwaccel_decode_error(exc):
+            print("  CUDA decode unavailable for this input; retrying with software decode...")
+            fallback_command = _build_crop_command(
+                input_file,
+                output_file,
+                start_time,
+                duration,
+                use_hwaccel=False,
+            )
+            _run_ffmpeg(fallback_command, "clip extraction")
+            return
+        raise
 
 
 def crop_video_with_cuts(input_file, output_file, start_time, end_time, cuts):
