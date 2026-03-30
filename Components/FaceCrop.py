@@ -432,7 +432,7 @@ def _get_video_duration(video_path):
 
 
 def combine_videos(video_with_audio, video_without_audio, output_filename,
-                   speech_gain_db=0.0, bg_music_path=None):
+                   speech_gain_db=0.0, bg_music_path=None, music_gain_db=None):
     try:
         if not speech_gain_db and not bg_music_path:
             # Fast path: stream-copy when no audio processing needed
@@ -476,10 +476,11 @@ def combine_videos(video_with_audio, video_without_audio, output_filename,
             if bg_music_path and os.path.isfile(bg_music_path):
                 inputs += ["-i", os.path.abspath(bg_music_path)]
                 fade_start = max(0, total_dur - 5.0)
+                _music_db = music_gain_db if music_gain_db is not None else -15
                 music_filter = (
                     f"[2:a]aloop=loop=-1:size=2e+09,"
                     f"atrim=0:{total_dur:.2f},"
-                    f"volume=-15dB,"
+                    f"volume={_music_db}dB,"
                     f"afade=t=out:st={fade_start:.2f}:d=5.0[music]"
                 )
                 filter_complex = (

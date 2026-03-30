@@ -7,7 +7,7 @@ import cv2
 
 
 MAX_LINES_PER_CAPTION = 2
-MAX_WORDS_PER_PHRASE = 6
+MAX_WORDS_PER_PHRASE = 4  # was 6 — shorter/punchier lines for social video
 
 # ASS colours use &HAABBGGRR
 ACTIVE_COLOUR = "&H0000FFFF"      # yellow
@@ -18,18 +18,18 @@ BOX_COLOUR = "&HCC000000"         # 80% transparent black box
 # Phrase segmentation defaults
 HARD_PUNCT = {".", "?", "!"}
 SOFT_PUNCT = {",", ";", ":"}
-MIN_WORDS_BEFORE_SOFT_BREAK = 4
+MIN_WORDS_BEFORE_SOFT_BREAK = 3   # was 4 — break earlier on commas
 MIN_PHRASE_DURATION = 0.4
-MAX_PHRASE_DURATION = 1.6
+MAX_PHRASE_DURATION = 2.0         # was 1.6 — German compound words need more time
 MAX_PHRASE_WORDS = MAX_WORDS_PER_PHRASE
 MIN_PHRASE_WORDS = 1
-HOLD_AFTER_PHRASE_SEC = 0.0
-MIN_WORD_DISPLAY_SEC = 0.02   # minimum time each word stays highlighted
+MIN_WORD_DISPLAY_SEC = 0.08   # minimum time each word stays highlighted (was 0.02)
+HOLD_AFTER_PHRASE_SEC = 1.5   # last word of phrase holds until next phrase starts, or this long (was 0.0)
 SILENCE_GAP_BREAK_SEC = 0.8  # force phrase break on silence gaps >= this
 
 # Stable wrapping defaults
-TARGET_CHARS_PER_LINE = 16
-MAX_CHARS_PER_LINE = 22
+TARGET_CHARS_PER_LINE = 14   # was 16 — narrower lines, more readable on portrait
+MAX_CHARS_PER_LINE = 18      # was 22
 
 NVENC_FLAGS = [
     "-c:v",

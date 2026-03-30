@@ -43,7 +43,7 @@ _FONT_CANDIDATES = [
 
 # Thumbnail text sizing
 _THUMB_FONT_RATIO = 0.10  # bigger than cinematic
-_THUMB_MAX_TEXT_W_RATIO = 0.88
+_THUMB_MAX_TEXT_W_RATIO = 0.84  # 8% safe margin each side (was 0.88)
 
 # Cinematic defaults (kept from previous version)
 _CINE_BLUR_RADIUS = 25
@@ -73,12 +73,22 @@ THUMBNAIL_STYLES = ("classic", "text_reveal", "dramatic")
 # Extended fancy styles from ai_after-effects (rendered frame-by-frame)
 FANCY_STYLES = ("kinetic", "glitch", "neon", "distortion")
 ALL_STYLES = THUMBNAIL_STYLES + FANCY_STYLES
+
+# Active style pool for random selection:
+# - text_reveal: track-matte (speaker visible through letters) — most preferred
+# - classic: visible speaker + bottom gradient + white/red text
+# dramatic + FANCY_STYLES removed: dramatic looks too dark/bloody, fancy styles
+# don't word-wrap and render as white-on-black which looks cheap.
+_ACTIVE_STYLES = ("text_reveal", "classic")
+_ACTIVE_STYLE_WEIGHTS = (0.70, 0.30)
+
 _TEXT_REVEAL_FONT_RATIO = 0.12  # larger text for mask/cutout effect
 _FANCY_FONT_RATIO = 0.10        # font ratio for fancy title styles
 _TEXT_REVEAL_END_REVEAL_SEC = 0.50  # final reveal window for track-matte zoom-out
 
 # Background-music defaults
-_BG_MUSIC_VOLUME_DB = -16  # background music level
+# Make background music 4 dB quieter by default
+_BG_MUSIC_VOLUME_DB = -20  # background music level (was -16)
 _BG_FADE_OUT_SEC = 2.0     # fade-out duration at end
 _TARGET_PEAK_DB = -2.0     # target peak for speech audio
 
@@ -149,6 +159,30 @@ def probe_peak_db(audio_path):
     if match:
         return float(match.group(1))
     return -10.0  # safe fallback
+
+
+def probe_lufs_integrated(audio_path) -> float:
+    """Return integrated LUFS of *audio_path* using FFmpeg loudnorm.
+
+    Uses a short analysis pass (no re-encode).  Falls back to ``-23.0``
+    (EBU R128 target) if the measurement cannot be obtained.
+    """
+    import re as _re, json as _json
+    cmd = [
+        "ffmpeg", "-hide_banner", "-i", os.path.abspath(audio_path),
+        "-af", "loudnorm=print_format=json",
+        "-f", "null", "-",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    # loudnorm prints JSON summary to stderr after the run
+    m = _re.search(r"\{[^}]+\}", result.stderr, _re.DOTALL)
+    if m:
+        try:
+            data = _json.loads(m.group())
+            return float(data["input_i"])  # integrated loudness in LUFS
+        except (KeyError, ValueError, _json.JSONDecodeError):
+            pass
+    return -23.0  # EBU R128 target as conservative fallback
 
 
 def _get_media_duration(media_path):
@@ -477,7 +511,11 @@ def _build_text_reveal_assets(frame_bgr, hook_text, accent_keyword=""):
 
     line_height = int(font_size * 1.20)
     total_text_h = line_height * len(lines)
-    text_y_start = (h - total_text_h) // 2
+    # Vertical safe zone: at least 6% from top and bottom edges
+    safe_top = int(h * 0.06)
+    safe_bottom = int(h * 0.94)
+    safe_h = safe_bottom - safe_top
+    text_y_start = safe_top + max(0, (safe_h - total_text_h) // 2)
 
     mask = Image.new("L", (w, h), 0)
     mask_draw = ImageDraw.Draw(mask)
@@ -1006,21 +1044,11 @@ def generate_thumbnail_card(
     h_frame, w_frame = frame.shape[:2]
     total_frames = int(fps * duration)
 
-    # Resolve the actual style name before rendering
+    # Resolve the actual style name before rendering.
+    # "random" / "auto" both draw from _ACTIVE_STYLES (text_reveal + classic only).
     resolved_style = style
     if style in ("random", "auto"):
-        if style == "random":
-            resolved_style = random.choice(ALL_STYLES)
-        else:
-            face_box = _detect_face_box(frame)
-            if face_box is not None:
-                _, _, fw, fh = face_box
-                if (fw * fh) / (w_frame * h_frame) > 0.04:
-                    resolved_style = random.choice(ALL_STYLES)
-                else:
-                    resolved_style = random.choice(("classic", "dramatic") + FANCY_STYLES)
-            else:
-                resolved_style = random.choice(("classic", "dramatic") + FANCY_STYLES)
+        resolved_style = random.choices(_ACTIVE_STYLES, weights=_ACTIVE_STYLE_WEIGHTS, k=1)[0]
 
     # ── Export standalone thumbnail image ──
     if thumbnail_image_path is None:
@@ -1449,6 +1477,7 @@ def assemble_with_title_card(
     title_duration=CINEMATIC_DURATION,
     speech_gain_db=0.0,
     bg_music_path=None,
+    music_gain_db=None,
 ):
     """Assemble final short: title card video + subtitled video + delayed audio.
 
@@ -1478,7 +1507,8 @@ def assemble_with_title_card(
 
     if bg_music_path and os.path.isfile(bg_music_path):
         inputs += ["-i", os.path.abspath(bg_music_path)]
-        music_filter = _bg_music_filter(3, total_dur)
+        _music_db = music_gain_db if music_gain_db is not None else _BG_MUSIC_VOLUME_DB
+        music_filter = _bg_music_filter(3, total_dur, volume_db=_music_db)
         filter_complex = (
             f"[0:v][1:v]concat=n=2:v=1:a=0[v];"
             f"{speech_filter};"

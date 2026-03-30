@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+import hashlib as _hashlib
 import json as _json
 from difflib import SequenceMatcher
 import os
@@ -465,59 +466,81 @@ def _chunk_transcription(trans_text, max_chars=12000, overlap_chars=1500):
 
 
 TRANSCRIPT_CLEANUP_PROMPT = """\
-You are an expert German subtitle editor with deep knowledge of spoken German, theology, and rhetoric.
+You are an expert German subtitle editor specialising in christian, biblical, theological, and rhetorical speech.
 
-You receive numbered transcript segments from an ASR-transcribed sermon or talk. Your job is to make the text readable as subtitles while preserving the speaker's voice and meaning.
+You receive numbered subtitle segments from an ASR-transcribed sermon. Your ONLY job is to
+fix obvious ASR recognition errors — nothing else. Treat every segment as a faithful
+transcription of what the speaker actually said, including their rhetorical devices, repetitions, mistakes and self-corrections.
 
-PRIMARY OBJECTIVE (HIGHEST PRIORITY):
-- Keep the ACTUAL spoken words faithful. When unsure, keep the original ASR words.
-- Prefer minimal edits over stylistic rewrites.
+PRIMARY RULE — FAITHFULNESS ABOVE ALL:
+- If in doubt, output the ORIGINAL text unchanged.
+- Minimal edits only. Never rewrite. Never paraphrase. Never condense.
+- Do NOT remove, merge, reorder, or silence any segment.
 
-MUST FIX:
-- **Filler words**: Remove "äh", "ähm", "eh", "hm", "also" (when used as filler, not as "therefore"), "ja" (when used as filler, not as "yes"), "ne", "gell", "halt", and other verbal fillers that add no meaning.
-- **ASR errors**: Fix obvious misrecognitions. Common patterns:
-  - Misheard German idioms: "Drum und Ranner" → "Drum und Dran", "im Endeffekte" → "im Endeffekt"
-  - Theological vocabulary: proper names of biblical figures, places, books of the Bible
-  - Compound words split or mangled by ASR
-  - Numbers and dates misheard
-- **Sentence boundaries**: Add proper punctuation. Split run-on sentences. Capitalize sentence starts.
-- **German idioms**: Recognize and correct common idioms the ASR may have mangled:
-  - "mit allem Drum und Dran", "auf Herz und Nieren", "Tacheles reden", "ins Schwarze treffen"
-  - Theological idioms: "Buße tun", "den Glauben bekennen", "im Geist wandeln"
-- **Proper nouns**: Correct biblical names (Elisa/Elischa, Joasch, Aram, Paulus, Petrus, etc.)
+==== WHAT YOU MAY FIX (ASR errors only) ====
 
-MUST PRESERVE:
-- The speaker's natural voice and style — do NOT make it sound like written text
-- Colloquial expressions that are intentional (e.g., "Verdammt noch einmal" when the speaker actually says it)
-- The emotional tone: emphatic repetition, rhetorical questions, exclamations
-- Segment indexes, timestamps, and order — do NOT merge, split, reorder, or drop segments
-- Bracketed markers like audience reactions — leave unchanged
+1. FILLER WORDS — remove ONLY these standalone spoken fillers that add zero meaning:
+   „äh", „ähm", „eh", „hm"
+   Do NOT remove „also" (= „therefore"), „ja" (= „yes" or rhetorical affirmation),
+   „ne", „gell", „halt" UNLESS they are clearly mid-sentence noise with no semantic role.
 
-DO NOT:
-- Summarize or condense — every segment keeps its full meaning
-- Invent content that wasn't said
-- Replace core lexical content words with plausible alternatives just because they fit context
-    (example of FORBIDDEN behavior: "Messias" -> "Christkind" unless the segment clearly contains that exact word)
-- Change the register (don't make casual speech formal)
-- Over-correct spoken German into written German — "Da hab ich gesagt" stays, don't change to "Da habe ich gesagt"
+2. OBVIOUS MISRECOGNITIONS — fix when the correction is unambiguous from the context:
+   - Theological names & places: Elisa→Elischa, Joasch, Aram, Paulus, Golgatha, etc.
+   - Biblical book names, psalm numbers, verse references
+   - German compound words split or fused incorrectly by ASR
+   - Numbers and dates that are clearly wrong
+   - Known German idioms mangled: „mit allem Drum und Ranner"→„mit allem Drum und Dran"
+
+3. PUNCTUATION — add or correct punctuation and capitalise sentence starts.
+   Do NOT restructure sentences to add punctuation — work with the existing word order.
+
+==== WHAT YOU MUST NEVER DO ====
+
+- NEVER remove repeated sentences or phrases.
+  Preachers deliberately repeat sentences for rhetorical emphasis (anaphora, epistrophe).
+  If the same sentence appears twice (or three times), keep ALL occurrences exactly as they are.
+
+- NEVER replace content words with alternatives, even if the alternative „makes more sense".
+  Example of FORBIDDEN behaviour:
+    Original: „Denn seinen Freunden gibt er es im Schlaf."
+    Forbidden: changing „Freunden" to any other word, removing the sentence, or paraphrasing it.
+
+- NEVER remove words because they seem redundant or repetitive — the speaker said them.
+
+- NEVER summarise, shorten, or condense segments.
+
+- NEVER change register: keep spoken German as spoken German.
+  „Da hab ich gesagt" stays — do not change to „Da habe ich gesagt".
+
+- NEVER invent content that might not have been said.
+
+- NEVER alter bracketed markers like [Applaus] or [Lachen] — leave them unchanged.
 
 IF UNCERTAIN:
-- Return the segment text unchanged.
-- Only perform changes when the correction is highly obvious from the segment itself.
+  Return the segment text UNCHANGED. Err strongly on the side of keeping the original.
 
-Return ONLY JSON:
+Return ONLY JSON (no markdown, no comments):
 [
-  {"index": 0, "text": "Corrected text"},
-  {"index": 1, "text": "Corrected text"}
+  {"index": 0, "text": "Corrected text or original text"},
+  {"index": 1, "text": "Corrected text or original text"}
 ]
 """
+
+# Short hash of the prompt — used to invalidate subtitle cleanup caches when
+# the prompt is changed. Recomputed lazily so editing the prompt above is all
+# that's needed; no manual version bump required.
+_TRANSCRIPT_CLEANUP_PROMPT_VERSION = _hashlib.md5(
+    TRANSCRIPT_CLEANUP_PROMPT.encode(), usedforsecurity=False
+).hexdigest()[:8]
 
 
 # Conservative safety rails for cleanup application.
 # Goal: reject semantic drift / hallucinated rewrites while still allowing
 # punctuation, filler removal, and minor obvious ASR typo fixes.
-_CLEANUP_MIN_SIMILARITY = 0.72
-_CLEANUP_MAX_NEW_TOKEN_RATIO = 0.28
+# Raised similarity floor (was 0.72) and lowered new-token budget (was 0.28)
+# to prevent the LLM from replacing whole words/phrases.
+_CLEANUP_MIN_SIMILARITY = 0.78
+_CLEANUP_MAX_NEW_TOKEN_RATIO = 0.18
 _CLEANUP_STRIP_CHARS = " \t\n\r.,;:!?\"'`´()[]{}<>/\\|+-=_*~"
 
 
@@ -614,12 +637,15 @@ def _parse_cleanup_response(text):
     return []
 
 
-def CleanTranscriptSegments(transcriptions, language="de"):
+def CleanTranscriptSegments(transcriptions, language="de", rejected_log_path=None):
     """Conservatively clean segment text for subtitle rendering.
 
     Keeps segment timing untouched and returns the same ``[[text, start, end], ...]``
     shape as the input.  This is intentionally segment-level cleanup so it can be
     used before subtitle generation without remapping word timestamps.
+
+    If *rejected_log_path* is given, every change that was blocked by the
+    safety rails is written there as JSON for later inspection.
     """
     if not transcriptions:
         return []
@@ -632,6 +658,7 @@ def CleanTranscriptSegments(transcriptions, language="de"):
     print(f"Cleaning transcript text in {len(chunks)} chunk(s)...")
     updated = 0
     rejected = 0
+    rejected_entries: list[dict] = []
 
     for chunk_idx, chunk in enumerate(chunks, start=1):
         lines = []
@@ -672,6 +699,12 @@ def CleanTranscriptSegments(transcriptions, language="de"):
             if old_text != new_text:
                 if not _cleanup_change_is_conservative(old_text, new_text):
                     rejected += 1
+                    rejected_entries.append({
+                        "index": idx,
+                        "original": old_text,
+                        "proposed": new_text,
+                        "reason": "safety_rail",
+                    })
                     continue
                 cleaned[idx][0] = new_text
                 updated += 1
@@ -682,6 +715,13 @@ def CleanTranscriptSegments(transcriptions, language="de"):
     print(f"[Cleanup] Updated {updated} segment(s) total.")
     if rejected:
         print(f"[Cleanup] Rejected {rejected} risky rewrite(s); kept original ASR wording.")
+        if rejected_log_path:
+            try:
+                with open(rejected_log_path, "w", encoding="utf-8") as fh:
+                    _json.dump(rejected_entries, fh, ensure_ascii=False, indent=2)
+                print(f"[Cleanup] Rejected rewrites logged to: {rejected_log_path}")
+            except Exception as exc:
+                print(f"[Cleanup] Could not write rejected log: {exc}")
     return cleaned
 
 
