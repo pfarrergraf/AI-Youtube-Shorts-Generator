@@ -58,58 +58,67 @@ Legacy compatibility:
 
 ## Usage
 
+All commands assume you are in the `parakeet_uv/` directory with the venv activated
+(`source .venv/bin/activate`) or using `.venv/bin/python` directly.
+
 ### Process a single video (extracts ALL highlights)
 
-```powershell
-.venv\Scripts\python.exe .\main.py "https://www.youtube.com/watch?v=VIDEO_ID" --auto-approve
+```bash
+.venv/bin/python cli/parakeet.py shorts \
+  --input "https://www.youtube.com/watch?v=VIDEO_ID" --auto-approve
 ```
 
 ### Process a local file
 
-```powershell
-.venv\Scripts\python.exe .\main.py "C:\path\to\video.mp4" --auto-approve
+```bash
+# On WSL, translate Windows drive letters: E:\... → /mnt/e/...
+.venv/bin/python cli/parakeet.py shorts \
+  --input "/mnt/e/Videos/my_video.mp4" --auto-approve --karaoke-subtitles
 ```
 
 ### Single best highlight only
 
-```powershell
-.venv\Scripts\python.exe .\main.py "C:\path\to\video.mp4" --single --auto-approve
+```bash
+.venv/bin/python cli/parakeet.py shorts \
+  --input "/mnt/e/Videos/my_video.mp4" --single --auto-approve
 ```
 
 ### Process a YouTube playlist
 
-```powershell
-.venv\Scripts\python.exe .\playlist_runner.py "https://www.youtube.com/playlist?list=PLAYLIST_ID" --auto-approve
+```bash
+.venv/bin/python playlist_runner.py \
+  "https://www.youtube.com/playlist?list=PLAYLIST_ID" --auto-approve
 ```
 
 ### Process a list of URLs from a text file
 
-```powershell
-.venv\Scripts\python.exe .\urls_runner.py --file urls.txt --auto-approve
+```bash
+.venv/bin/python urls_runner.py --file urls.txt --auto-approve
 ```
 
 ### Extract URLs from a YouTube channel
 
-```powershell
-.venv\Scripts\python.exe .\channel_urls.py "https://www.youtube.com/@ChannelName/videos" --output channel_urls.txt
+```bash
+.venv/bin/python channel_urls.py \
+  "https://www.youtube.com/@ChannelName/videos" --output channel_urls.txt
 ```
 
 ### Overnight autonomous batch
 
-```powershell
+```bash
 # Discover and process sermon + comedy videos (min 200K views)
-.venv\Scripts\python.exe .\overnight_runner.py --preset mixed --target-count 200
+.venv/bin/python overnight_runner.py --preset mixed --target-count 200
 
 # Dry-run: preview candidates without processing
-.venv\Scripts\python.exe .\overnight_runner.py --preset sermons --dry-run
+.venv/bin/python overnight_runner.py --preset sermons --dry-run
 ```
 
 ### Batch process local files
 
-```powershell
-Get-ChildItem "E:\Videos\*.mp4" | ForEach-Object {
-    .venv\Scripts\python.exe .\main.py $_.FullName --auto-approve
-}
+```bash
+for f in /mnt/e/Videos/*.mp4; do
+  .venv/bin/python cli/parakeet.py shorts --input "$f" --auto-approve
+done
 ```
 
 ## How It Works

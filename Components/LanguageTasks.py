@@ -253,14 +253,25 @@ WHAT MAKES A CLIP GREAT (in order of importance):
 
 HOW TO IDENTIFY COMPLETE SEQUENCES:
 1. **Read the ENTIRE transcription first.** Map out where each distinct topic, story, joke or argument begins and ends.
-2. **A sequence starts** where the speaker introduces a new premise or topic. Signals: topic shift, setup phrase ("Also...", "Und dann...", "Stellt euch vor...", "Ich weiß noch..."), ("Wenn du...") or a new subject after a pause/reaction.
+2. **A sequence starts** where the speaker introduces the premise that makes the payoff meaningful. Signals: topic shift, setup phrase ("Also...", "Und dann...", "Stellt euch vor...", "Ich weiß noch..."), ("Wenn du...") or a new subject after a pause/reaction.
+    - Start EARLY enough that a first-time viewer understands who or what the speaker is talking about.
+    - If the strong line depends on a setup sentence or question right before it, include that setup.
+    - Do NOT start at the apparent "best sentence" if that sentence lands better with 1-3 earlier sentences of framing.
 3. **A sequence MUST end AFTER the payoff.** This is the most critical rule:
    - If a story leads to a funny moment → include the laughter/reaction COMPLETELY
    - If an argument builds to a conclusion → include the conclusion sentence
    - If there's an audience reaction → your end time MUST be AFTER the END timestamp of the last reaction
    - If someone says something witty and the audience laughs → that laugh IS the ending, don't cut before it
    - If we have a story with multiple punchlines → include them all until the story truly ends
+    - If the speaker adds a final clarifying or sharpening sentence immediately after the main punchline, include that too.
 4. **Never end a clip during setup.** If the story is "X happened, and then Y said Z" — you MUST include what Z said and how the audience reacted.
+
+OPENING AND ENDING QUALITY CHECK:
+- Before returning a clip, ask: "Would a new viewer instantly understand why this starts here?"
+- If the opening feels abrupt, move the start earlier.
+- Ask: "Does the final sentence feel like a real ending, not a truncation?"
+- If the ending feels cut off, include the next resolving sentence or reaction.
+- Prefer a slightly longer clip with a meaningful opening and a complete ending over a shorter clip with a sharper but confusing cut.
 
 CRITICAL RULES:
 - **The payoff is NON-NEGOTIABLE.** A 90-second clip that includes the punchline beats a 45-second clip that cuts before it. If the punchline is at second 88 of a story that starts at second 0, the clip is 88+ seconds. So be it.
@@ -287,7 +298,15 @@ Return ONLY a JSON array (no markdown fences). Each element:
     "why": "<brief explanation of what makes this clip compelling>"
 }
 
-Return [] if no good clips exist."""
+Return [] if no good clips exist.
+
+You may also receive a REFERENCE EXCERPT from a manuscript or service script.
+Use it only to recognise names, theological terms, likely topic flow, and fragile wording.
+The actual spoken transcript always wins if it differs from the reference."""
+
+_MULTI_HIGHLIGHT_PROMPT_VERSION = _hashlib.md5(
+    MULTI_HIGHLIGHT_PROMPT.encode(), usedforsecurity=False
+).hexdigest()[:12]
 
 
 def GetHighlight(Transcription):
@@ -472,6 +491,11 @@ You receive numbered subtitle segments from an ASR-transcribed sermon. Your ONLY
 fix obvious ASR recognition errors — nothing else. Treat every segment as a faithful
 transcription of what the speaker actually said, including their rhetorical devices, repetitions, mistakes and self-corrections.
 
+Sometimes you also receive a REFERENCE TEXT and/or protected sermon terms. The reference is
+supporting context from a preparation manuscript or service script. Use it only to recognise
+names, places, theological wording, likely numbers, and likely sermon flow. NEVER force the
+reference wording onto the transcript if the speaker clearly digressed or said something else.
+
 PRIMARY RULE — FAITHFULNESS ABOVE ALL:
 - If in doubt, output the ORIGINAL text unchanged.
 - Minimal edits only. Never rewrite. Never paraphrase. Never condense.
@@ -637,7 +661,14 @@ def _parse_cleanup_response(text):
     return []
 
 
-def CleanTranscriptSegments(transcriptions, language="de", rejected_log_path=None):
+def CleanTranscriptSegments(
+    transcriptions,
+    language="de",
+    rejected_log_path=None,
+    reference_text=None,
+    protected_terms=None,
+    prompt_hints=None,
+):
     """Conservatively clean segment text for subtitle rendering.
 
     Keeps segment timing untouched and returns the same ``[[text, start, end], ...]``
@@ -670,9 +701,22 @@ def CleanTranscriptSegments(transcriptions, language="de", rejected_log_path=Non
         user_content = (
             f"Language hint: {language}\n"
             "Correct these subtitle transcript segments conservatively.\n"
-            "Return only JSON.\n\n"
-            + "\n".join(lines)
+            "Return only JSON.\n"
         )
+        if reference_text:
+            user_content += (
+                "\nReference sermon manuscript / service script excerpt:\n"
+                "Use this only as NON-AUTHORITATIVE context for names, key terms, and the main flow.\n"
+                "The spoken sermon may digress, paraphrase, or differ from the manuscript. Never force manuscript wording over actual speech.\n\n"
+                + str(reference_text).strip()
+                + "\n"
+            )
+        if protected_terms:
+            user_content += "\nProtected sermon terms and spellings:\n- " + "\n- ".join(str(item).strip() for item in protected_terms if str(item).strip()) + "\n"
+        if prompt_hints:
+            user_content += "\nExact correction hints:\n- " + "\n- ".join(str(item).strip() for item in prompt_hints if str(item).strip()) + "\n"
+        user_content += "\n"
+        user_content += "\n".join(lines)
 
         try:
             response = _call_llm(TRANSCRIPT_CLEANUP_PROMPT, user_content, temperature=0.2)
@@ -725,7 +769,7 @@ def CleanTranscriptSegments(transcriptions, language="de", rejected_log_path=Non
     return cleaned
 
 
-def GetAllHighlights(Transcription):
+def GetAllHighlights(Transcription, reference_text=None):
     """Analyze the full transcription and return ALL highlight-worthy segments.
 
     Returns a list of dicts sorted by impact score (highest first):
@@ -741,7 +785,17 @@ def GetAllHighlights(Transcription):
             if len(chunks) > 1:
                 print(f"  Chunk {i+1}/{len(chunks)} ({len(chunk)} chars)...")
 
-            text = _call_llm(MULTI_HIGHLIGHT_PROMPT, chunk, temperature=0.5)
+            user_content = chunk
+            if reference_text:
+                user_content = (
+                    "Reference sermon manuscript / service script excerpt:\n"
+                    "Use this as NON-AUTHORITATIVE context for names, key ideas, and topic flow only.\n"
+                    "The spoken sermon may differ from the manuscript, so the transcript always wins when there is tension.\n\n"
+                    + str(reference_text).strip()
+                    + "\n\n=== Transcript ===\n"
+                    + chunk
+                )
+            text = _call_llm(MULTI_HIGHLIGHT_PROMPT, user_content, temperature=0.5)
             try:
                 parsed = _json.loads(text)
             except _json.JSONDecodeError:

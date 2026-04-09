@@ -1,6 +1,28 @@
 # Commands
 
-All commands run from the repo root in PowerShell.
+> **Environment**: All commands run in WSL2 (`~/parakeet_uv/` as working directory).  
+> Virtual env is at `~/parakeet_uv/.venv`.  
+> Windows drive `E:\` is mounted at `/mnt/e/` in WSL.
+
+## Prerequisites — LLM server must be running first
+
+The highlight-selection step calls a local LLM on `http://127.0.0.1:1234/v1`.  
+**Start LM Studio on Windows**, load `qwen2.5-72b-instruct`, enable the server on port 1234, then proceed.  
+Check server status:
+```bash
+curl http://127.0.0.1:1234/v1/models
+```
+
+## Output location
+
+Finished shorts land in **`~/shorts_output/`** (WSL path: `/home/benjamin_graf/shorts_output/`).  
+From Windows Explorer you can browse to:
+```
+\\wsl.localhost\Ubuntu\home\benjamin_graf\shorts_output
+```
+Each short is named: `{video-slug}_{session-hash}_{clip-index}_short.mp4`  
+Thumbnail: same name with `_thumb.jpg`.  
+FX-corrected copy: same name with `_fx-auto-correct_fx.mp4`.
 
 ## Process a local video (interactive)
 
