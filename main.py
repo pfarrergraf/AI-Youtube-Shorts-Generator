@@ -272,6 +272,7 @@ if Vid:
                     transcriptions,
                     video_start_time=padded_start,
                     word_timestamps=word_timestamps,
+                    highlight_start_time=clip_start,
                 )
 
                 clean_title = clean_filename(video_title) if video_title else "output"

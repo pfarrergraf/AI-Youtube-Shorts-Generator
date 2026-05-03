@@ -552,12 +552,27 @@ def _build_word_events(
     *,
     transcriptions=None,
     trim_leading_partial_phrase=False,
+    highlight_start_time=None,
 ):
     adjusted = []
     dropped = 0
+    # If a highlight start is provided, compute offset (relative to clip start)
+    highlight_offset = None
+    if highlight_start_time is not None:
+        try:
+            highlight_offset = float(highlight_start_time) - float(video_start_time)
+        except Exception:
+            highlight_offset = None
+
     for w in word_timestamps:
         start = w["start"] - video_start_time
         end = w["end"] - video_start_time
+        # If highlight_offset is set, strictly exclude any word that starts
+        # before the highlight (no tolerance, no shifting).
+        if highlight_offset is not None:
+            if start < highlight_offset:
+                # word starts before highlight — drop it
+                continue
         if end <= 0:
             continue
         if video_duration > 0 and start > video_duration:
@@ -600,6 +615,7 @@ def _build_word_events(
 def add_subtitles_to_video(input_video, output_video, transcriptions,
                            video_start_time=0, word_timestamps=None,
                            trim_leading_partial_phrase=False,
+                           highlight_start_time=None,
                            extra_vf=""):
     input_video = os.path.abspath(input_video)
     output_video = os.path.abspath(output_video)
@@ -614,6 +630,7 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
             video_duration,
             transcriptions=transcriptions,
             trim_leading_partial_phrase=trim_leading_partial_phrase,
+            highlight_start_time=highlight_start_time,
         )
 
     relevant_transcriptions = []
