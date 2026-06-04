@@ -470,8 +470,8 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
     # slightly smaller than before
     font_size = max(33, int(video_height * 0.053) - 2)
 
-    # keep captions clearly in lower third and away from center
-    margin_v = max(190, int(video_height * 0.19))
+    # keep captions above lower-third overlay (~27% from bottom)
+    margin_v = max(340, int(video_height * 0.27))
     margin_h = max(70, int(video_width * 0.10))
 
     outline = max(3, int(video_height * 0.0035))

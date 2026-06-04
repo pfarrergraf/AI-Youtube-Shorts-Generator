@@ -3,13 +3,23 @@ import hashlib as _hashlib
 import json as _json
 from difflib import SequenceMatcher
 import os
+import re
 import shutil
 import subprocess
+import sys
 import time
 import urllib.request
 import urllib.error
 
 load_dotenv()
+
+try:
+    from utils.highlight_schema import normalise_highlight_candidate
+except Exception:
+    _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    if _repo_root not in sys.path:
+        sys.path.insert(0, _repo_root)
+    from utils.highlight_schema import normalise_highlight_candidate
 
 def _first_env(*names, default=None):
     for name in names:
@@ -293,9 +303,18 @@ Return ONLY a JSON array (no markdown fences). Each element:
 {
     "start": <start seconds — EXACT timestamp where this topic's setup begins>,
     "end": <end seconds — AFTER the payoff and any audience reaction>,
+    "title": "<short 4-8 word clip title>",
+    "hook": "<very short scroll-stopping hook phrase>",
     "content": "<1-2 sentence summary: what happens AND what the payoff/punchline is>",
     "impact": <1-10 integer — honest audience impact score>,
-    "why": "<brief explanation of what makes this clip compelling>"
+    "confidence": <0.00-1.00 confidence that this stands alone as a clip>,
+    "why": "<brief explanation of what makes this clip compelling>",
+    "speaker": "<speaker name if known, else null>",
+    "transcript_excerpt": "<short verbatim excerpt from the transcript for this clip>",
+    "suggested_caption": "<1 sentence social caption suggestion>",
+    "suggested_thumbnail_concept": "<short thumbnail text or image concept>",
+    "platform_fit": ["youtube_shorts", "instagram_reels", "tiktok"],
+    "risk_notes": ["context risk, transcript uncertainty, or doctrinal nuance if relevant"]
 }
 
 Return [] if no good clips exist.
@@ -668,6 +687,7 @@ def CleanTranscriptSegments(
     reference_text=None,
     protected_terms=None,
     prompt_hints=None,
+    speaker_profile_text=None,
 ):
     """Conservatively clean segment text for subtitle rendering.
 
@@ -709,6 +729,14 @@ def CleanTranscriptSegments(
                 "Use this only as NON-AUTHORITATIVE context for names, key terms, and the main flow.\n"
                 "The spoken sermon may digress, paraphrase, or differ from the manuscript. Never force manuscript wording over actual speech.\n\n"
                 + str(reference_text).strip()
+                + "\n"
+            )
+        if speaker_profile_text:
+            user_content += (
+                "\nSpeaker profile context:\n"
+                "Use this only to preserve speaker-specific terms, rhetorical habits, and likely highlight-worthy wording.\n"
+                "Do not invent wording that is not present in the transcript.\n\n"
+                + str(speaker_profile_text).strip()
                 + "\n"
             )
         if protected_terms:
@@ -769,11 +797,11 @@ def CleanTranscriptSegments(
     return cleaned
 
 
-def GetAllHighlights(Transcription, reference_text=None):
+def GetAllHighlights(Transcription, reference_text=None, speaker_profile_text=None):
     """Analyze the full transcription and return ALL highlight-worthy segments.
 
     Returns a list of dicts sorted by impact score (highest first):
-    [{"start": float, "end": float, "content": str, "impact": int, "why": str}, ...]
+    [{"start": float, "end": float, "content": str, "impact": int, "why": str, ...}, ...]
     """
     try:
         chunks = _chunk_transcription(Transcription)
@@ -795,6 +823,15 @@ def GetAllHighlights(Transcription, reference_text=None):
                     + "\n\n=== Transcript ===\n"
                     + chunk
                 )
+            if speaker_profile_text:
+                user_content = (
+                    "Speaker profile context:\n"
+                    "Use this only to preserve speaker-specific theological vocabulary, recurring rhetoric, and highlight patterns.\n"
+                    "The actual transcript always wins when the profile and transcript differ.\n\n"
+                    + str(speaker_profile_text).strip()
+                    + "\n\n=== Transcript ===\n"
+                    + (user_content if user_content is not chunk else chunk)
+                )
             text = _call_llm(MULTI_HIGHLIGHT_PROMPT, user_content, temperature=0.5)
             try:
                 parsed = _json.loads(text)
@@ -806,31 +843,14 @@ def GetAllHighlights(Transcription, reference_text=None):
                 parsed = [parsed]
 
             for item in parsed:
-                try:
-                    s = float(item["start"])
-                    e = float(item["end"])
-                except (KeyError, ValueError, TypeError):
+                if not isinstance(item, dict):
                     continue
-                if e > s and (e - s) >= 20:
-                    # Accept both new "impact" field and legacy "quality" field
-                    impact = 5  # default
-                    if "impact" in item:
-                        try:
-                            impact = max(1, min(10, int(item["impact"])))
-                        except (ValueError, TypeError):
-                            pass
-                    elif item.get("quality") == "high":
-                        impact = 8
-                    elif item.get("quality") == "medium":
-                        impact = 5
-
-                    all_highlights.append({
-                        "start": s,
-                        "end": e,
-                        "content": item.get("content", ""),
-                        "impact": impact,
-                        "why": item.get("why", ""),
-                    })
+                normalised = normalise_highlight_candidate(item)
+                if not normalised:
+                    continue
+                if normalised["duration"] < 20:
+                    continue
+                all_highlights.append(normalised)
 
         # Sort by start time first for de-overlap pass
         all_highlights.sort(key=lambda h: h["start"])
@@ -840,21 +860,34 @@ def GetAllHighlights(Transcription, reference_text=None):
         for h in all_highlights:
             if cleaned and h["start"] < cleaned[-1]["end"]:
                 prev = cleaned[-1]
-                if h["impact"] > prev["impact"]:
+                if (
+                    h["impact"] > prev["impact"]
+                    or (
+                        h["impact"] == prev["impact"]
+                        and float(h.get("confidence", 0.0)) > float(prev.get("confidence", 0.0))
+                    )
+                ):
                     cleaned[-1] = h
                 # else keep previous (higher or equal impact)
             else:
                 cleaned.append(h)
 
-        # Final sort by impact score (best first)
-        cleaned.sort(key=lambda h: h["impact"], reverse=True)
+        # Final sort by impact score (best first), then confidence, then duration.
+        cleaned.sort(
+            key=lambda h: (
+                int(h.get("impact", 0) or 0),
+                float(h.get("confidence", 0.0) or 0.0),
+                float(h.get("duration", 0.0) or 0.0),
+            ),
+            reverse=True,
+        )
 
         print(f"\n{'='*60}")
         print(f"FOUND {len(cleaned)} HIGHLIGHT(S) (ranked by impact):")
         for i, h in enumerate(cleaned):
             dur = h['end'] - h['start']
             print(f"  {i+1}. [{h['start']:.1f}s - {h['end']:.1f}s] ({dur:.0f}s) "
-                  f"[impact={h['impact']}] {h['content'][:70]}")
+                  f"[impact={h['impact']}] {h.get('title') or h['content'][:70]}")
             if h.get('why'):
                 print(f"     → {h['why'][:80]}")
         print(f"{'='*60}\n")
@@ -989,7 +1022,8 @@ Rules:
 - 2-5 words MAXIMUM. Shorter is better.  Think "BROKEN HEART", "WHY DO WE PRAY?", "FASTING", "GOD'S DNA".
 - ALL CAPS is fine and encouraged for punch.
 - Communicate the core message or provoke curiosity in the fewest words possible.
-- German if the transcript is German, English if English.
+- LANGUAGE: If the transcript is German, the hook MUST be in German. No exceptions. Do not mix languages.
+- NEVER describe the speaker or sermon. NEVER write "The speaker...", "Der Sprecher...", "Er erklärt...", "This clip...". Write the MESSAGE ITSELF as a headline or quote.
 - NO hashtags, emojis, or clickbait filler ("UNGLAUBLICH", "DAS MUSST DU SEHEN").
 - The keyword on line 2 must be ONE word from the hook that carries the most weight.
 
@@ -1007,6 +1041,143 @@ NICHT AUFHÖREN
 AUFHÖREN
 
 Return EXACTLY two lines. No quotes, no explanation, no JSON."""
+
+
+_HOOK_META_PREFIXES = (
+    "the speaker", "der sprecher", "er erklärt", "sie erklärt",
+    "this clip", "dieses video", "in this", "in diesem", "the pastor",
+    "the preacher", "der prediger", "he draws", "she draws",
+)
+_ENGLISH_META_WORDS = {
+    "the", "speaker", "uses", "use", "this", "clip", "message", "explains",
+    "shows", "pastor", "preacher", "metaphor", "perspective", "why", "what",
+}
+_GERMAN_STOPWORDS = {
+    "der", "die", "das", "und", "oder", "aber", "den", "dem", "des", "ein", "eine",
+    "einer", "einem", "einen", "ist", "sind", "war", "waren", "wir", "ihr", "du", "sie",
+    "er", "es", "ich", "man", "nicht", "noch", "schon", "auch", "nur", "für", "mit",
+    "von", "aus", "bei", "auf", "im", "in", "am", "an", "zu", "zum", "zur", "dass",
+    "wenn", "weil", "wie", "was", "wer", "wo", "heute", "jetzt", "immer", "ganz",
+    "einfach", "mal", "also", "doch", "dann", "hier", "dort", "haben", "hat", "hatte",
+    "wird", "werden", "kann", "können", "soll", "sollen", "muss", "müssen",
+    "uns", "euch", "ihnen", "dein", "deine", "deinen", "deiner", "mein", "meine",
+    "meinen", "unser", "unsere", "unserem", "unseren",
+}
+
+
+def _hook_words(text):
+    return re.findall(r"[A-Za-zÄÖÜäöüß']+", str(text or ""))
+
+
+def _transcript_word_set(text):
+    return {word.lower() for word in _hook_words(text) if len(word) >= 4}
+
+
+def _is_invalid_hook(hook, keyword, clip_transcript="", language="de"):
+    hook = " ".join(str(hook or "").split()).strip()
+    keyword = " ".join(str(keyword or "").split()).strip()
+    if not hook:
+        return True
+
+    lowered = hook.lower()
+    if any(lowered.startswith(prefix) for prefix in _HOOK_META_PREFIXES):
+        return True
+
+    words = _hook_words(hook)
+    if not 2 <= len(words) <= 5:
+        return True
+    if keyword and keyword.upper() not in hook.upper():
+        return True
+
+    transcript_words = _transcript_word_set(clip_transcript)
+    if transcript_words and not any(word.lower() in transcript_words for word in words):
+        return True
+
+    if str(language or "").lower().startswith("de"):
+        english_hits = sum(1 for word in words if word.lower() in _ENGLISH_META_WORDS)
+        if english_hits >= max(2, len(words) - 1):
+            return True
+    return False
+
+
+def _fallback_title_hook(clip_content, clip_transcript="", language="de"):
+    title_text = ""
+    if isinstance(language, tuple):
+        language, title_text = language
+    transcript_words = _hook_words(clip_transcript)
+    cleaned_title = str(title_text or "").strip()
+    if cleaned_title:
+        title_segments = [seg.strip() for seg in re.split(r"[|｜]+", cleaned_title) if seg.strip()]
+        primary = title_segments[0] if title_segments else cleaned_title
+        dash_segments = [seg.strip() for seg in re.split(r"\s[-–:]\s", primary) if seg.strip()]
+        primary = max(dash_segments, key=len) if dash_segments else primary
+        if primary:
+            candidate = re.sub(r"\b(move|church|wiesbaden|predigt|predigtclip|kanzelclips)\b", "", primary, flags=re.IGNORECASE)
+            candidate = " ".join(candidate.split()).upper()
+            if 5 <= len(candidate) <= 28 and len(_hook_words(candidate)) <= 5:
+                keyword = max(_hook_words(candidate), key=len)
+                return candidate, keyword
+
+    if str(language or "").lower().startswith("de") and transcript_words:
+        filtered = [word for word in transcript_words if len(word) >= 4 and word.lower() not in _GERMAN_STOPWORDS]
+        if filtered:
+            ranked = sorted(filtered, key=lambda word: (-len(word), transcript_words.index(word)))
+            anchor = ranked[0]
+            anchor_idx = next((idx for idx, word in enumerate(transcript_words) if word.lower() == anchor.lower()), 0)
+            window = []
+            for word in transcript_words[max(0, anchor_idx - 2): anchor_idx + 2]:
+                if len(word) >= 3 and word.lower() not in _GERMAN_STOPWORDS:
+                    window.append(word.upper())
+            if not window:
+                window = [anchor.upper()]
+            hook = " ".join(window[:4]).strip()
+            if len(hook) > 30:
+                hook = hook[:30].rsplit(" ", 1)[0].strip()
+            if hook:
+                keyword = max(hook.split(), key=len)
+                return hook, keyword
+
+    fallback = clip_content[:30].rsplit(" ", 1)[0] if len(clip_content) > 30 else clip_content
+    fallback = " ".join(str(fallback or "").split()).upper()
+    kw = max(fallback.split(), key=len) if fallback.split() else ""
+    return fallback, kw
+
+
+THUMBNAIL_BRIEF_PROMPT = """\
+You are the thumbnail director for portrait smartphone sermon highlight clips.
+
+You receive:
+- Video title
+- Transcript excerpt
+- Content summary
+- Language
+- Optional speaker name
+- Optional brand label
+
+Your job:
+Return EXACTLY one JSON object with these keys:
+- hook_text
+- accent_keyword
+- emotion_target
+- speaker_side
+- background_style
+- brand_label
+
+Hard constraints:
+- The thumbnail is portrait 9:16 for smartphone-first sermon shorts.
+- The same design is used both as the uploaded thumbnail image and as the first frame / opening card.
+- hook_text must be 2-5 words, max 28 characters.
+- hook_text must be truthful, concrete, and curiosity-driving without cheap clickbait.
+- If the transcript is German, the hook must be German.
+- Do not describe the speaker. Write the message itself.
+- Keep typography clean and easy to read in under 1 second.
+- Avoid red default typography. Prefer ivory text with one restrained accent.
+- Leave the lower caption zone visually calm; prioritize the upper third.
+
+speaker_side must be one of: left, right, center_low, auto
+background_style must be one of: clean_gradient, strong_contrast, emotion_focus
+
+Return JSON only. No markdown fences."""
 
 
 def GenerateTitleHook(clip_content, clip_transcript="", video_title="", language="de"):
@@ -1027,27 +1198,105 @@ def GenerateTitleHook(clip_content, clip_transcript="", video_title="", language
     parts.append(f"Language: {language}")
     user_msg = "\n\n".join(parts)
 
-    try:
-        raw = _call_llm(TITLE_HOOK_PROMPT, user_msg, temperature=0.7)
-        lines = [l.strip().strip('"').strip("'").strip('\u201c').strip('\u201d')
-                 for l in raw.strip().splitlines() if l.strip()]
-        hook = lines[0] if lines else ""
-        keyword = lines[1] if len(lines) > 1 else ""
-        if len(hook) > 40:
-            hook = hook[:37] + "\u2026"
-        if hook:
-            # Validate keyword is actually in the hook
-            if keyword.upper() not in hook.upper():
-                # Pick the longest word as accent
-                keyword = max(hook.split(), key=len) if hook.split() else ""
-            return hook, keyword
-    except Exception as exc:
-        print(f"[TitleHook] LLM call failed ({exc}); using fallback.")
+    for _attempt in range(3):
+        try:
+            raw = _call_llm(TITLE_HOOK_PROMPT, user_msg, temperature=0.7)
+            lines = [l.strip().strip('"').strip("'").strip('\u201c').strip('\u201d')
+                     for l in raw.strip().splitlines() if l.strip()]
+            hook = lines[0] if lines else ""
+            keyword = lines[1] if len(lines) > 1 else ""
+            if len(hook) > 40:
+                hook = hook[:37] + "\u2026"
+            if hook:
+                if keyword.upper() not in hook.upper():
+                    keyword = max(hook.split(), key=len) if hook.split() else ""
+                if _is_invalid_hook(hook, keyword, clip_transcript=clip_transcript, language=language):
+                    print(f"[TitleHook] Rejected weak/meta hook: {hook!r} — retrying")
+                    continue
+                return hook, keyword
+        except Exception as exc:
+            print(f"[TitleHook] LLM call failed ({exc}); using fallback.")
+            break
 
-    # Fallback: first 30 chars of clip_content
-    fallback = clip_content[:30].rsplit(" ", 1)[0] if len(clip_content) > 30 else clip_content
-    kw = max(fallback.split(), key=len) if fallback.split() else ""
-    return fallback, kw
+    return _fallback_title_hook(
+        clip_content,
+        clip_transcript=clip_transcript,
+        language=(language, video_title),
+    )
+
+
+def GenerateThumbnailBrief(
+    clip_content,
+    clip_transcript="",
+    video_title="",
+    language="de",
+    speaker_name="",
+    brand_label="",
+):
+    """Ask the LLM for a compact portrait-thumbnail brief."""
+    parts = [f"Video title: {video_title}"]
+    if clip_transcript:
+        t = clip_transcript[:800]
+        if len(clip_transcript) > 800:
+            t = t.rsplit(" ", 1)[0] + " ..."
+        parts.append(f"Transcript:\n{t}")
+    parts.append(f"Content summary: {clip_content}")
+    parts.append(f"Language: {language}")
+    if speaker_name:
+        parts.append(f"Speaker name: {speaker_name}")
+    if brand_label:
+        parts.append(f"Brand label: {brand_label}")
+    user_msg = "\n\n".join(parts)
+
+    hook_fallback, accent_fallback = GenerateTitleHook(
+        clip_content,
+        clip_transcript=clip_transcript,
+        video_title=video_title,
+        language=language,
+    )
+    fallback = {
+        "hook_text": hook_fallback,
+        "accent_keyword": accent_fallback,
+        "emotion_target": "conviction",
+        "speaker_side": "auto",
+        "background_style": "clean_gradient",
+        "brand_label": brand_label or "",
+    }
+
+    try:
+        raw = _call_llm(THUMBNAIL_BRIEF_PROMPT, user_msg, temperature=0.5)
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            cleaned = cleaned.replace("json", "", 1).strip()
+        payload = _json.loads(cleaned)
+        if not isinstance(payload, dict):
+            return fallback
+        hook_text = " ".join(str(payload.get("hook_text") or "").split())[:28]
+        accent_keyword = " ".join(str(payload.get("accent_keyword") or "").split())
+        if not hook_text:
+            return fallback
+        if accent_keyword.upper() not in hook_text.upper():
+            accent_keyword = accent_fallback or max(hook_text.split(), key=len)
+        if _is_invalid_hook(hook_text, accent_keyword, clip_transcript=clip_transcript, language=language):
+            return fallback
+        speaker_side = str(payload.get("speaker_side") or "auto").strip().lower()
+        if speaker_side not in {"left", "right", "center_low", "auto"}:
+            speaker_side = "auto"
+        background_style = str(payload.get("background_style") or "clean_gradient").strip().lower()
+        if background_style not in {"clean_gradient", "strong_contrast", "emotion_focus"}:
+            background_style = "clean_gradient"
+        return {
+            "hook_text": hook_text,
+            "accent_keyword": accent_keyword,
+            "emotion_target": " ".join(str(payload.get("emotion_target") or "conviction").split())[:40],
+            "speaker_side": speaker_side,
+            "background_style": background_style,
+            "brand_label": " ".join(str(payload.get("brand_label") or brand_label or "").split())[:28],
+        }
+    except Exception as exc:
+        print(f"[ThumbnailBrief] LLM call failed ({exc}); using fallback.")
+        return fallback
 
 
 if __name__ == "__main__":

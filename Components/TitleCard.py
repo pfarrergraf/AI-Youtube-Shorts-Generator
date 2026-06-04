@@ -74,13 +74,10 @@ THUMBNAIL_STYLES = ("classic", "text_reveal", "dramatic")
 FANCY_STYLES = ("kinetic", "glitch", "neon", "distortion")
 ALL_STYLES = THUMBNAIL_STYLES + FANCY_STYLES
 
-# Active style pool for random selection:
-# - text_reveal: track-matte (speaker visible through letters) — most preferred
-# - classic: visible speaker + bottom gradient + white/red text
-# dramatic + FANCY_STYLES removed: dramatic looks too dark/bloody, fancy styles
-# don't word-wrap and render as white-on-black which looks cheap.
-_ACTIVE_STYLES = ("text_reveal", "classic")
-_ACTIVE_STYLE_WEIGHTS = (0.70, 0.30)
+# Active style pool for random/auto selection.
+# Keep only the preacher-visible classic look as default.
+_ACTIVE_STYLES = ("classic",)
+_ACTIVE_STYLE_WEIGHTS = (1.0,)
 
 _TEXT_REVEAL_FONT_RATIO = 0.12  # larger text for mask/cutout effect
 _FANCY_FONT_RATIO = 0.10        # font ratio for fancy title styles
@@ -336,24 +333,16 @@ def _detect_face_box(frame_bgr):
 
 
 def _pick_text_lane(face_box, width, height):
-    """Choose upper-third or mid-lower lane based on face position.
+    """Return a fixed center lane for the hook text.
+
+    Always centered vertically in the frame (25–62% from top),
+    leaving room for the lower-third overlay below.
+    Face position is intentionally ignored — centering looks better
+    and is more consistent across different stage setups.
 
     Returns (lane_top, lane_bottom) in pixels.
     """
-    upper = (int(height * 0.06), int(height * 0.40))
-    lower = (int(height * 0.45), int(height * 0.72))
-
-    if face_box is None:
-        return upper  # default to upper third
-
-    fx, fy, fw, fh = face_box
-    face_center_y = fy + fh / 2
-
-    # If face is in the upper half, use lower lane
-    if face_center_y < height * 0.45:
-        return lower
-    # If face is in the lower half, use upper lane
-    return upper
+    return (int(height * 0.25), int(height * 0.62))
 
 
 def _face_aware_darken(img, face_box, width, height):
@@ -1007,7 +996,10 @@ def generate_thumbnail_card(
     duration=THUMBNAIL_DURATION,
     output_path=None,
     thumbnail_image_path=None,
-    style="random",
+    style="classic",
+    mode="legacy",
+    brief=None,
+    variants_dir=None,
 ):
     """Create a thumbnail-style hook video (speaker visible, bold text overlay).
 
@@ -1029,8 +1021,12 @@ def generate_thumbnail_card(
         Where to write the standalone thumbnail image.
         Defaults to ``<output_dir>/<video_basename>_thumb.jpg``.
     style : str
-        ``"random"`` (default), ``"auto"``, ``"classic"``,
+        ``"classic"`` (default), ``"random"``, ``"auto"``,
         ``"text_reveal"``, or ``"dramatic"``.
+    mode : str
+        ``"legacy"`` keeps the old renderer. ``"v2"`` renders three
+        portrait variants into a separate artifact folder, scores them, then
+        uses the winner for both the uploaded thumbnail and first-frame card.
 
     Returns
     -------
@@ -1045,7 +1041,7 @@ def generate_thumbnail_card(
     total_frames = int(fps * duration)
 
     # Resolve the actual style name before rendering.
-    # "random" / "auto" both draw from _ACTIVE_STYLES (text_reveal + classic only).
+    # "random" / "auto" both draw from _ACTIVE_STYLES.
     resolved_style = style
     if style in ("random", "auto"):
         resolved_style = random.choices(_ACTIVE_STYLES, weights=_ACTIVE_STYLE_WEIGHTS, k=1)[0]
@@ -1060,6 +1056,21 @@ def generate_thumbnail_card(
     if output_path is None:
         output_path = os.path.join(
             os.path.dirname(video_path), "_thumbnail.mp4"
+        )
+
+    if str(mode or "legacy").lower() == "v2":
+        from Components.ThumbnailV2 import render_thumbnail_v2_assets
+
+        return render_thumbnail_v2_assets(
+            frame,
+            hook_text=hook_text,
+            accent_keyword=accent_keyword,
+            output_video_path=output_path,
+            thumbnail_image_path=thumbnail_image_path,
+            duration=duration,
+            fps=fps,
+            brief=brief,
+            variants_dir=variants_dir,
         )
 
     tmp_dir = tempfile.mkdtemp(prefix="thumbnail_")

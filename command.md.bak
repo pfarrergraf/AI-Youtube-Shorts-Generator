@@ -18,7 +18,7 @@ curl http://127.0.0.1:1234/v1/models
 Finished shorts land in **`~/shorts_output/`** (WSL path: `/home/benjamin_graf/shorts_output/`).  
 From Windows Explorer you can browse to:
 ```
-\\wsl.localhost\Ubuntu-SSD\home\benjamin_graf\shorts_output
+\\wsl.localhost\Ubuntu\home\benjamin_graf\shorts_output
 ```
 Each short is named: `{video-slug}_{session-hash}_{clip-index}_short.mp4`  
 Thumbnail: same name with `_thumb.jpg`.  
