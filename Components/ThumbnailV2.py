@@ -236,16 +236,23 @@ def _frame_background(frame_bgr: np.ndarray, variant: str) -> Image.Image:
         "emotion_first": 0.90,
     }
     color_by_variant = {
-        "clean_editorial": 0.94,
+        "clean_editorial": 0.98,
         "strong_contrast": 1.02,
-        "emotion_first": 1.00,
+        "emotion_first": 1.05,
     }
     canvas = ImageEnhance.Contrast(canvas).enhance(contrast_by_variant[variant])
     canvas = ImageEnhance.Color(canvas).enhance(color_by_variant[variant])
     canvas = ImageEnhance.Brightness(canvas).enhance(brightness_by_variant[variant])
 
     tint = _background(width, height, variant)
-    return Image.blend(canvas, tint, 0.28 if variant != "strong_contrast" else 0.24)
+    canvas = Image.blend(canvas, tint, 0.28 if variant != "strong_contrast" else 0.24)
+    warmth_alpha = {
+        "clean_editorial": 26,
+        "strong_contrast": 18,
+        "emotion_first": 34,
+    }[variant]
+    warmth_overlay = Image.new("RGBA", (width, height), (164, 102, 62, warmth_alpha))
+    return Image.alpha_composite(canvas, warmth_overlay)
 
 
 def _crop_to_alpha(image: Image.Image) -> Image.Image:
@@ -300,14 +307,15 @@ def _compose_variant(
     accent = _sanitize_keyword(hook, accent_keyword)
     brand_label = str((brief or {}).get("brand_label") or _DEFAULT_BRAND).strip().upper()[:28]
 
-    safe_margin_x = int(width * 0.06)
-    font_size = int(height * (0.088 if variant != "emotion_first" else 0.094))
+    safe_margin_x = int(width * 0.05)
+    safe_margin_bottom = int(height * 0.05)
+    font_size = int(height * (0.104 if variant != "emotion_first" else 0.108))
     font = _load_font(font_size)
-    max_width = int(width * (0.43 if variant != "emotion_first" else 0.50))
+    max_width = int(width * (0.82 if variant != "emotion_first" else 0.84))
     tmp = Image.new("RGBA", (1, 1))
     tmp_draw = ImageDraw.Draw(tmp)
-    allowed_lines = 3 if variant != "emotion_first" else 2
-    max_text_height = int(height * (0.22 if variant != "emotion_first" else 0.18))
+    allowed_lines = 3
+    max_text_height = int(height * 0.20)
     while font_size > 34:
         lines = _wrap_text(hook, font, max_width, tmp_draw)
         line_height = int(font_size * 1.12)
@@ -328,10 +336,7 @@ def _compose_variant(
         (_measure_line_width(line, font, tmp_draw, accent, font_size) for line in lines),
         default=max_width,
     )
-    box_y = int(height * 0.09)
-    if variant == "emotion_first":
-        box_y = int(height * 0.07)
-        max_width = int(width * 0.50)
+    box_y = int(height * (0.60 if variant != "emotion_first" else 0.58))
 
     brand_font_size = max(24, font_size // 3)
     brand_font = _load_font(brand_font_size)
@@ -342,8 +347,7 @@ def _compose_variant(
         brand_bbox = tmp_draw.textbbox((0, 0), brand_label, font=brand_font)
 
     content_width = max(rendered_width, (brand_bbox[2] - brand_bbox[0]) + 34)
-    box_x = safe_margin_x if text_side == "left" else width - safe_margin_x - content_width
-    box_x = max(safe_margin_x, min(width - safe_margin_x - content_width, box_x))
+    box_x = max(safe_margin_x, min(width - safe_margin_x - content_width, (width - content_width) // 2))
 
     overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
@@ -351,10 +355,8 @@ def _compose_variant(
         box_x - 22,
         box_y - 22,
         min(width - safe_margin_x, box_x + content_width + 22),
-        box_y + total_height + 98,
+        min(height - safe_margin_bottom, box_y + total_height + 102),
     ]
-    if variant == "emotion_first":
-        panel[2] = min(width - safe_margin_x, panel[2])
     panel_fill = (6, 10, 16, 112 if variant == "clean_editorial" else 138)
     overlay_draw.rounded_rectangle(panel, radius=34, fill=panel_fill)
     overlay = overlay.filter(ImageFilter.GaussianBlur(radius=1.4))

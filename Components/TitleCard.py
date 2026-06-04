@@ -1058,10 +1058,25 @@ def generate_thumbnail_card(
             os.path.dirname(video_path), "_thumbnail.mp4"
         )
 
-    if str(mode or "legacy").lower() == "v2":
+    resolved_mode = str(mode or "legacy").lower()
+    if resolved_mode == "v2":
         from Components.ThumbnailV2 import render_thumbnail_v2_assets
 
         return render_thumbnail_v2_assets(
+            frame,
+            hook_text=hook_text,
+            accent_keyword=accent_keyword,
+            output_video_path=output_path,
+            thumbnail_image_path=thumbnail_image_path,
+            duration=duration,
+            fps=fps,
+            brief=brief,
+            variants_dir=variants_dir,
+        )
+    if resolved_mode == "v2_test":
+        from Components.ThumbnailV2Test import render_thumbnail_v2_test_assets
+
+        return render_thumbnail_v2_test_assets(
             frame,
             hook_text=hook_text,
             accent_keyword=accent_keyword,
