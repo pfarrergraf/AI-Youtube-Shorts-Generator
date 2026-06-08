@@ -1,0 +1,247 @@
+{
+  "output": "thumbnail_variants/Jael - Gott nutzt, wen er will ｜ Antonio Weil ｜ Move Church_frame01_energy_orange_9x16.png",
+  "template": "energy_orange",
+  "format": "9x16",
+  "score": 0.8875,
+  "provider_used": "rembg",
+  "background_removal_attempts": [
+    {
+      "provider": "rembg",
+      "coverage": 0.166,
+      "accepted": true
+    }
+  ],
+  "caption_cleanup": {
+    "applied": false,
+    "boxes": [],
+    "mask_coverage": 0.0,
+    "reason": "no_caption_regions"
+  },
+  "frame_selection": {
+    "video_path": "/home/benjamin_graf/parakeet_uv/downloads/Jael - Gott nutzt, wen er will ｜ Antonio Weil ｜ Move Church.mp4",
+    "decoder": "opencv",
+    "face_scorer": "haar",
+    "face_scorer_info": {
+      "requested": "mediapipe",
+      "active": "haar",
+      "reason": "mediapipe_import_failed: ModuleNotFoundError: No module named 'mediapipe'"
+    },
+    "selected": {
+      "timestamp": 2572.826,
+      "score": 347.876,
+      "sharpness": 12.74,
+      "brightness": 155.06,
+      "contrast": 75.96,
+      "face": {
+        "face_box": [
+          1205,
+          106,
+          209,
+          209
+        ],
+        "face_width_ratio": 0.10885416666666667,
+        "face_area_ratio": 0.021065297067901233,
+        "mouth_open": 0.1,
+        "eye_open": 0.08,
+        "head_tilt": 0.0,
+        "source": "haar"
+      },
+      "rejected_reason": "motion_blur"
+    },
+    "top_candidates": [
+      {
+        "timestamp": 2572.826,
+        "score": 347.876,
+        "sharpness": 12.74,
+        "brightness": 155.06,
+        "contrast": 75.96,
+        "face": {
+          "face_box": [
+            1205,
+            106,
+            209,
+            209
+          ],
+          "face_width_ratio": 0.10885416666666667,
+          "face_area_ratio": 0.021065297067901233,
+          "mouth_open": 0.1,
+          "eye_open": 0.08,
+          "head_tilt": 0.0,
+          "source": "haar"
+        },
+        "rejected_reason": "motion_blur"
+      },
+      {
+        "timestamp": 2140.014,
+        "score": 344.924,
+        "sharpness": 12.66,
+        "brightness": 168.82,
+        "contrast": 72.14,
+        "face": {
+          "face_box": [
+            932,
+            118,
+            212,
+            212
+          ],
+          "face_width_ratio": 0.11041666666666666,
+          "face_area_ratio": 0.021674382716049382,
+          "mouth_open": 0.1,
+          "eye_open": 0.08,
+          "head_tilt": 0.0,
+          "source": "haar"
+        },
+        "rejected_reason": "motion_blur"
+      },
+      {
+        "timestamp": 1274.39,
+        "score": 344.623,
+        "sharpness": 7.81,
+        "brightness": 176.25,
+        "contrast": 66.23,
+        "face": {
+          "face_box": [
+            923,
+            124,
+            222,
+            222
+          ],
+          "face_width_ratio": 0.115625,
+          "face_area_ratio": 0.02376736111111111,
+          "mouth_open": 0.1,
+          "eye_open": 0.08,
+          "head_tilt": 0.0,
+          "source": "haar"
+        },
+        "rejected_reason": "motion_blur"
+      }
+    ]
+  },
+  "metrics": {
+    "variant": "energy_orange",
+    "hook_text": "GOTT NUTZT, WEN ER WILL JAEL",
+    "subject_coverage": 0.166,
+    "face_box": [
+      547,
+      474,
+      330,
+      387
+    ],
+    "text_bounds": [
+      50,
+      115,
+      506,
+      1345
+    ],
+    "depth_bonus": 0.08,
+    "keyword_visibility_bonus": 0.04,
+    "edge_touch_penalty": 0.0,
+    "face_collision_penalty": 0.0,
+    "text_occlusion_penalty": 0.0,
+    "back_text_occlusion_ratio": 0.0,
+    "back_text_max_occlusion_ratio": 0.0,
+    "back_text_occlusion_penalty": 0.0,
+    "front_body_overlap_ratio": 0.4222,
+    "front_face_overlap_ratio": 0.0,
+    "front_depth_penalty": 0.0,
+    "front_face_penalty": 0.0,
+    "vertical_gap_ratio": 0.2505,
+    "composition_density_penalty": 0.0,
+    "raw_score_variant": 0.9042,
+    "readability_score": 0.7647,
+    "layout": {
+      "fmt": "9x16",
+      "composition": "upper_face",
+      "font_size": 166,
+      "back_font_size": 124,
+      "front_font_size": 166,
+      "text_bounds": [
+        50,
+        115,
+        506,
+        1345
+      ],
+      "back_text_bounds": [
+        50,
+        115,
+        484,
+        690
+      ],
+      "front_text_bounds": [
+        82,
+        1171,
+        506,
+        1345
+      ],
+      "text_word_bounds": [
+        [
+          50,
+          115,
+          387,
+          256
+        ],
+        [
+          50,
+          224,
+          484,
+          364
+        ],
+        [
+          50,
+          333,
+          346,
+          472
+        ],
+        [
+          50,
+          442,
+          252,
+          581
+        ],
+        [
+          50,
+          551,
+          359,
+          690
+        ],
+        [
+          82,
+          1171,
+          506,
+          1345
+        ]
+      ],
+      "face_box": [
+        547,
+        474,
+        330,
+        387
+      ],
+      "body_box": [
+        327,
+        446,
+        1080,
+        1920
+      ],
+      "closeup_subject": false,
+      "source_face_height_ratio": 0.2592,
+      "source_head_span_ratio": 0.3839,
+      "front_text_x": 82,
+      "front_body_overlap_ratio": 0.4222,
+      "front_face_overlap_ratio": 0.0,
+      "face_overlap_ratio": 0.0,
+      "vertical_gap_ratio": 0.2505,
+      "back_text_occlusion_ratio": 0.0,
+      "back_text_max_occlusion_ratio": 0.0,
+      "back_text_word_occlusion_ratios": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "clipping_penalty": 0.0,
+    "score": 0.8875
+  }
+}

@@ -220,8 +220,43 @@ Your job: find the single best self-contained episode for a short-form video cli
 
 HOW TO FIND A COMPLETE SEQUENCE:
 1. **Read the ENTIRE transcription first.** Identify where each distinct topic/story/joke BEGINS and ENDS.
-2. **A sequence starts** where the speaker introduces a new topic, premise, or story. Look for topic shifts: "Also...", "Und dann...", "Ich war mal...", "Stellt euch vor...", or simply a new subject after a pause/reaction.
-3. **A sequence ends** when:
+2. **A sequence starts** where the speaker introduces a new topic, premise, or story. Look for topic shifts: "Also...", "Und dann...", "Ich war mal...", "Stellt euch vor...", "Wenn du...", "...wir müssen uns fragen...", "die Frage ist..." or "Wenn wir nicht lernen..." or simply a new subject after a pause/reaction.
+3. **A sequence is pre-introduced or announced by the speaker explicitly: **"Hör mir gut zu...:" or "Lasst mich mal ein Beispiel geben..." or "über eine Sache im klaren...:" or "Ich weiß noch, wie ich mal...". If the strong line depends on a setup sentence or question right before it, include that setup. Do NOT start at the apparent "best sentence" if that sentence lands better with 1-3 earlier sentences of framing.
+4. **A rhetorical device like in Lausbergs docs/Stilfiguren_Lausberg/stilfiguren.json: 1. `antonomasie`
+2. `evidentia`
+3. `gedankenfiguren`
+4. `geminatio`
+5. `gradatio`
+6. `homoeoteleuton`
+7. `lausberg-ironia-rev1`
+8. `isocolon`
+9. `litotes`
+10. `onomasiologische_distinctio`
+11. `paromoeosis`
+12. `periphrase`
+13. `permissio`
+14. `reduplicatio`
+15. `regressio`
+16. `anaphora`
+17. `annominatio`
+18. `antitheton`
+19. `asyndeton`
+20. `brachylogia`
+21. `commoratio`
+22. `communicatio`
+23. `commutatio`
+24. `derivatio`
+25. `detractio`
+26. `disiunctio`
+27. `epiphora`
+28. `metapher_lausberg`
+29. `metonymie`
+30. `reflexio`
+31. `reticentia`
+32. `tropus_synecdoche_001`
+33. `traductio`
+etc.** can signal the start of a sequence. If the speaker uses one of these devices to build up to a punchline or insight, include the whole device until the payoff.
+5. **A sequence ends** when:
    - The speaker moves to a DIFFERENT topic/premise (not just the next sentence in the same story)
    - The final audience reaction for this topic has completely finished
    - There is a clear pause before new content begins
@@ -256,6 +291,39 @@ WHAT MAKES A CLIP GREAT (in order of importance):
 1. **Complete story arc with a PAYOFF** — Every clip MUST end with a clear payoff: a punchline -- better multiple punchlines each adding another layer --, a surprising twist or multiple twists, an emotional revelation, a moment of laughter, or a profound insight. A story without its ending is WORTHLESS, unless it is a strong part conveying a message. The payoff is what makes people rewatch.
 2. **Audience impact** — The clip should make the viewer feel something: laugh, think, get goosebumps, feel convicted, or be genuinely surprised. Rate this honestly.
 3. **Rhetorical power** — Vivid imagery, compelling analogies, well-timed pauses, rhetorical questions with answers, escalating tension, voice modulation implied by the text (exclamations, short punchy sentences, repetition).
+A rhetorical device like in Lausbergs docs/Stilfiguren_Lausberg/stilfiguren.json: 1. `antonomasie`
+2. `evidentia`
+3. `gedankenfiguren`
+4. `geminatio`
+5. `gradatio`
+6. `homoeoteleuton`
+7. `lausberg-ironia-rev1`
+8. `isocolon`
+9. `litotes`
+10. `onomasiologische_distinctio`
+11. `paromoeosis`
+12. `periphrase`
+13. `permissio`
+14. `reduplicatio`
+15. `regressio`
+16. `anaphora`
+17. `annominatio`
+18. `antitheton`
+19. `asyndeton`
+20. `brachylogia`
+21. `commoratio`
+22. `communicatio`
+23. `commutatio`
+24. `derivatio`
+25. `detractio`
+26. `disiunctio`
+27. `epiphora`
+28. `metapher_lausberg`
+29. `metonymie`
+30. `reflexio`
+31. `reticentia`
+32. `tropus_synecdoche_001`
+33. `traductio`
 4. **Self-contained meaning** — A first-time viewer who has NEVER seen the full video must fully understand the clip. No dangling references, no "as I said earlier".
 5. **Psychological hooks** — Stories with conflict, unexpected turns, relatable situations, or statements that challenge assumptions.
 6. **Theological/intellectual precision** — Interesting biblical insights, counter-intuitive interpretations, connections the audience hasn't heard before.
@@ -267,14 +335,16 @@ HOW TO IDENTIFY COMPLETE SEQUENCES:
     - Start EARLY enough that a first-time viewer understands who or what the speaker is talking about.
     - If the strong line depends on a setup sentence or question right before it, include that setup.
     - Do NOT start at the apparent "best sentence" if that sentence lands better with 1-3 earlier sentences of framing.
-3. **A sequence MUST end AFTER the payoff.** This is the most critical rule:
+3. **A sequence starts** where the speaker introduces a new topic, premise, or story. Look for topic shifts: "Also...", "Und dann...", "Ich war mal...", "Stellt euch vor...", "Wenn du...", "...wir müssen uns fragen...", "die Frage ist..." or "Wenn wir nicht lernen..." or simply a new subject after a pause/reaction.
+    4. **A sequence is pre-introduced or announced by the speaker explicitly: **"Hör mir gut zu...:" or "Lasst mich mal ein Beispiel geben..." or "über eine Sache im klaren...:" or "Ich weiß noch, wie ich mal...". If the strong line depends on a setup sentence or question right before it, include that setup. Do NOT start at the apparent "best sentence" if that sentence lands better with 1-3 earlier sentences of framing.
+5. **A sequence MUST end AFTER the payoff.** This is the most critical rule:
    - If a story leads to a funny moment → include the laughter/reaction COMPLETELY
    - If an argument builds to a conclusion → include the conclusion sentence
    - If there's an audience reaction → your end time MUST be AFTER the END timestamp of the last reaction
    - If someone says something witty and the audience laughs → that laugh IS the ending, don't cut before it
    - If we have a story with multiple punchlines → include them all until the story truly ends
     - If the speaker adds a final clarifying or sharpening sentence immediately after the main punchline, include that too.
-4. **Never end a clip during setup.** If the story is "X happened, and then Y said Z" — you MUST include what Z said and how the audience reacted.
+6. **Never end a clip during setup.** If the story is "X happened, and then Y said Z" — you MUST include what Z said and how the audience reacted.
 
 OPENING AND ENDING QUALITY CHECK:
 - Before returning a clip, ask: "Would a new viewer instantly understand why this starts here?"
@@ -1048,6 +1118,26 @@ _HOOK_META_PREFIXES = (
     "this clip", "dieses video", "in this", "in diesem", "the pastor",
     "the preacher", "der prediger", "he draws", "she draws",
 )
+_HOOK_VISUAL_PROMPTS = (
+    "gesichtsausdruck",
+    "gesicht",
+    "smartphone",
+    "handy",
+    "selfie",
+    "kamera",
+    "foto",
+    "bild",
+    "portrait",
+    "screenshot",
+    "thumbnail",
+    "close-up",
+    "hintergrund",
+    "verwirrt",
+    "verwirrter",
+    "bildbeschreibung",
+    "look",
+    "expression",
+)
 _ENGLISH_META_WORDS = {
     "the", "speaker", "uses", "use", "this", "clip", "message", "explains",
     "shows", "pastor", "preacher", "metaphor", "perspective", "why", "what",
@@ -1081,6 +1171,8 @@ def _is_invalid_hook(hook, keyword, clip_transcript="", language="de"):
 
     lowered = hook.lower()
     if any(lowered.startswith(prefix) for prefix in _HOOK_META_PREFIXES):
+        return True
+    if any(marker in lowered for marker in _HOOK_VISUAL_PROMPTS):
         return True
 
     words = _hook_words(hook)
@@ -1143,6 +1235,43 @@ def _fallback_title_hook(clip_content, clip_transcript="", language="de"):
     return fallback, kw
 
 
+def _fallback_thumbnail_background_prompt(
+    clip_content,
+    *,
+    video_title="",
+    speaker_name="",
+    brand_label="",
+    background_style="clean_gradient",
+):
+    style = str(background_style or "clean_gradient").strip().lower()
+    style_map = {
+        "clean_gradient": "clean editorial sermon background, soft depth, calm gradient, subtle stage light",
+        "strong_contrast": "strong cinematic sermon background, dark contrast, bright rim light, moody atmosphere",
+        "emotion_focus": "emotion-focused sermon background, warm atmosphere, gentle bloom, concentrated light",
+    }
+    theme_source = " ".join(str(value or "").strip() for value in (video_title, clip_content))
+    theme_tokens = [word for word in _hook_words(theme_source) if len(word) >= 4]
+    theme = " ".join(dict.fromkeys(token.lower() for token in theme_tokens))[:120]
+    parts = [
+        "cinematic sermon background, portrait orientation",
+        style_map.get(style, style_map["clean_gradient"]),
+    ]
+    if theme:
+        parts.append(f"inspired by {theme}")
+    if speaker_name:
+        parts.append(f"for {speaker_name}")
+    if brand_label:
+        parts.append(f"branded for {brand_label}")
+    parts.append("no people, no text, no watermark, no logo, soft depth")
+    return ", ".join(parts)
+
+
+_DEFAULT_BACKGROUND_NEGATIVE = (
+    "text, letters, caption, watermark, logo, subtitles, screenshot, UI, "
+    "people, face, hands, phone, smartphone, camera, blurry, distorted, clutter"
+)
+
+
 THUMBNAIL_BRIEF_PROMPT = """\
 You are the thumbnail director for portrait smartphone sermon highlight clips.
 
@@ -1161,6 +1290,8 @@ Return EXACTLY one JSON object with these keys:
 - emotion_target
 - speaker_side
 - background_style
+- background_prompt
+- background_negative_prompt
 - brand_label
 
 Hard constraints:
@@ -1173,6 +1304,8 @@ Hard constraints:
 - Keep typography clean and easy to read in under 1 second.
 - Avoid red default typography. Prefer ivory text with one restrained accent.
 - Leave the lower caption zone visually calm; prioritize the upper third.
+- background_prompt must be a positive SDXL background prompt for the image only.
+- background_negative_prompt must be a concise negative prompt that excludes text, watermark, logo, people, face, hands, and UI clutter.
 
 speaker_side must be one of: left, right, center_low, auto
 background_style must be one of: clean_gradient, strong_contrast, emotion_focus
@@ -1260,6 +1393,14 @@ def GenerateThumbnailBrief(
         "emotion_target": "conviction",
         "speaker_side": "auto",
         "background_style": "clean_gradient",
+        "background_prompt": _fallback_thumbnail_background_prompt(
+            clip_content,
+            video_title=video_title,
+            speaker_name=speaker_name,
+            brand_label=brand_label,
+            background_style="clean_gradient",
+        ),
+        "background_negative_prompt": _DEFAULT_BACKGROUND_NEGATIVE,
         "brand_label": brand_label or "",
     }
 
@@ -1286,12 +1427,26 @@ def GenerateThumbnailBrief(
         background_style = str(payload.get("background_style") or "clean_gradient").strip().lower()
         if background_style not in {"clean_gradient", "strong_contrast", "emotion_focus"}:
             background_style = "clean_gradient"
+        background_prompt = " ".join(str(payload.get("background_prompt") or "").split())[:240]
+        if not background_prompt:
+            background_prompt = _fallback_thumbnail_background_prompt(
+                clip_content,
+                video_title=video_title,
+                speaker_name=speaker_name,
+                brand_label=brand_label,
+                background_style=background_style,
+            )
+        background_negative_prompt = " ".join(str(payload.get("background_negative_prompt") or "").split())[:240]
+        if not background_negative_prompt:
+            background_negative_prompt = _DEFAULT_BACKGROUND_NEGATIVE
         return {
             "hook_text": hook_text,
             "accent_keyword": accent_keyword,
             "emotion_target": " ".join(str(payload.get("emotion_target") or "conviction").split())[:40],
             "speaker_side": speaker_side,
             "background_style": background_style,
+            "background_prompt": background_prompt,
+            "background_negative_prompt": background_negative_prompt,
             "brand_label": " ".join(str(payload.get("brand_label") or brand_label or "").split())[:28],
         }
     except Exception as exc:

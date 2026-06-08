@@ -455,15 +455,48 @@ def _score_variant(image: Image.Image, metadata: dict) -> float:
     subject_score = max(0.0, 1.0 - min(1.0, abs(coverage - 0.26) / 0.24))
     word_count = len(str(metadata.get("hook_text") or "").split())
     brevity_score = max(0.0, 1.0 - max(0, word_count - 4) * 0.22)
+    coverage_penalty = 0.0
+    if coverage > 0.42:
+        coverage_penalty += 0.06
+    if coverage > 0.50:
+        coverage_penalty += 0.12
+
+    edge_touch_penalty = float(metadata.get("edge_touch_penalty") or 0.0)
+    thin_component_penalty = float(metadata.get("thin_component_penalty") or 0.0)
+    echo_rect_penalty = float(metadata.get("echo_rect_penalty") or 0.0)
+    face_collision_penalty = float(metadata.get("face_collision_penalty") or 0.0)
+    occlusion_penalty = float(metadata.get("text_occlusion_penalty") or 0.0)
+    background_word_penalty = float(metadata.get("background_word_penalty") or 0.0)
+    negative_space_penalty = float(metadata.get("negative_space_penalty") or 0.0)
+    depth_bonus = float(metadata.get("depth_bonus") or 0.0)
+    keyword_bonus = float(metadata.get("keyword_visibility_bonus") or 0.0)
 
     variant = metadata.get("variant")
     prior = {
         "clean_editorial": 0.08,
         "strong_contrast": 0.06,
         "emotion_first": 0.10 if face_score > 0.48 else 0.03,
+        "depth_typography": 0.05 if face_score > 0.38 else 0.01,
+        "split_depth_text": 0.04 if face_score > 0.38 else 0.0,
     }.get(variant, 0.0)
 
-    score = contrast_score * 0.36 + face_score * 0.30 + subject_score * 0.18 + brevity_score * 0.10 + prior
+    score = (
+        contrast_score * 0.36
+        + face_score * 0.30
+        + subject_score * 0.18
+        + brevity_score * 0.10
+        + prior
+        + depth_bonus
+        + keyword_bonus
+        - coverage_penalty
+        - edge_touch_penalty
+        - thin_component_penalty
+        - echo_rect_penalty
+        - face_collision_penalty
+        - occlusion_penalty
+        - background_word_penalty
+        - negative_space_penalty
+    )
     return round(float(score), 4)
 
 

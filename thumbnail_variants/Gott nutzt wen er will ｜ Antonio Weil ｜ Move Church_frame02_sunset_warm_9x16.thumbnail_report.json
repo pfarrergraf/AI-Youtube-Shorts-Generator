@@ -1,0 +1,226 @@
+{
+  "output": "thumbnail_variants/Gott nutzt wen er will ｜ Antonio Weil ｜ Move Church_frame02_sunset_warm_9x16.png",
+  "template": "sunset_warm",
+  "format": "9x16",
+  "score": 0.9439,
+  "provider_used": "rembg",
+  "background_removal_attempts": [
+    {
+      "provider": "rembg",
+      "coverage": 0.1604,
+      "accepted": true
+    }
+  ],
+  "caption_cleanup": {
+    "applied": false,
+    "boxes": [],
+    "mask_coverage": 0.0,
+    "reason": "no_caption_regions"
+  },
+  "frame_selection": {
+    "video_path": "/home/benjamin_graf/parakeet_uv/downloads/Gott nutzt wen er will ｜ Antonio Weil ｜ Move Church.mp4",
+    "decoder": "ffmpeg",
+    "face_scorer": "haar",
+    "face_scorer_info": {
+      "requested": "mediapipe",
+      "active": "haar",
+      "reason": "mediapipe_import_failed: ModuleNotFoundError: No module named 'mediapipe'"
+    },
+    "selected": {
+      "timestamp": 2572.842,
+      "score": 347.06,
+      "sharpness": 11.79,
+      "brightness": 154.79,
+      "contrast": 76.11,
+      "face": {
+        "face_box": [
+          1208,
+          106,
+          208,
+          208
+        ],
+        "face_width_ratio": 0.10833333333333334,
+        "face_area_ratio": 0.020864197530864197,
+        "mouth_open": 0.1,
+        "eye_open": 0.08,
+        "head_tilt": 0.0,
+        "source": "haar"
+      },
+      "rejected_reason": "motion_blur"
+    },
+    "top_candidates": [
+      {
+        "timestamp": 2572.842,
+        "score": 347.06,
+        "sharpness": 11.79,
+        "brightness": 154.79,
+        "contrast": 76.11,
+        "face": {
+          "face_box": [
+            1208,
+            106,
+            208,
+            208
+          ],
+          "face_width_ratio": 0.10833333333333334,
+          "face_area_ratio": 0.020864197530864197,
+          "mouth_open": 0.1,
+          "eye_open": 0.08,
+          "head_tilt": 0.0,
+          "source": "haar"
+        },
+        "rejected_reason": "motion_blur"
+      },
+      {
+        "timestamp": 2067.891,
+        "score": 341.682,
+        "sharpness": 15.28,
+        "brightness": 169.66,
+        "contrast": 72.82,
+        "face": {
+          "face_box": [
+            744,
+            132,
+            207,
+            207
+          ],
+          "face_width_ratio": 0.1078125,
+          "face_area_ratio": 0.0206640625,
+          "mouth_open": 0.1,
+          "eye_open": 0.08,
+          "head_tilt": 0.0,
+          "source": "haar"
+        },
+        "rejected_reason": "motion_blur"
+      },
+      {
+        "timestamp": 2140.027,
+        "score": 341.157,
+        "sharpness": 11.67,
+        "brightness": 168.9,
+        "contrast": 72.07,
+        "face": {
+          "face_box": [
+            928,
+            120,
+            207,
+            207
+          ],
+          "face_width_ratio": 0.1078125,
+          "face_area_ratio": 0.0206640625,
+          "mouth_open": 0.1,
+          "eye_open": 0.08,
+          "head_tilt": 0.0,
+          "source": "haar"
+        },
+        "rejected_reason": "motion_blur"
+      }
+    ]
+  },
+  "metrics": {
+    "variant": "sunset_warm",
+    "hook_text": "EINE WIE KEINE",
+    "subject_coverage": 0.1604,
+    "face_box": [
+      395,
+      324,
+      418,
+      428
+    ],
+    "text_bounds": [
+      50,
+      115,
+      978,
+      1571
+    ],
+    "depth_bonus": 0.08,
+    "keyword_visibility_bonus": 0.04,
+    "edge_touch_penalty": 0.0,
+    "face_collision_penalty": 0.0,
+    "text_occlusion_penalty": 0.0,
+    "back_text_occlusion_ratio": 0.0,
+    "back_text_max_occlusion_ratio": 0.0,
+    "back_text_occlusion_penalty": 0.0,
+    "front_body_overlap_ratio": 0.9289,
+    "front_face_overlap_ratio": 0.0,
+    "front_depth_penalty": 0.0,
+    "front_face_penalty": 0.0,
+    "vertical_gap_ratio": 0.4521,
+    "composition_density_penalty": 0.0295,
+    "raw_score_variant": 0.9853,
+    "readability_score": 0.8863,
+    "layout": {
+      "fmt": "9x16",
+      "composition": "upper_face",
+      "font_size": 342,
+      "back_font_size": 145,
+      "front_font_size": 342,
+      "text_bounds": [
+        50,
+        115,
+        978,
+        1571
+      ],
+      "back_text_bounds": [
+        50,
+        115,
+        418,
+        399
+      ],
+      "front_text_bounds": [
+        50,
+        1267,
+        978,
+        1571
+      ],
+      "text_word_bounds": [
+        [
+          50,
+          115,
+          418,
+          272
+        ],
+        [
+          50,
+          242,
+          375,
+          399
+        ],
+        [
+          50,
+          1267,
+          978,
+          1571
+        ]
+      ],
+      "face_box": [
+        395,
+        324,
+        418,
+        428
+      ],
+      "body_box": [
+        116,
+        292,
+        1080,
+        1920
+      ],
+      "closeup_subject": false,
+      "source_face_height_ratio": 0.2594,
+      "source_head_span_ratio": 0.3552,
+      "front_text_x": 50,
+      "front_body_overlap_ratio": 0.9289,
+      "front_face_overlap_ratio": 0.0,
+      "face_overlap_ratio": 0.0,
+      "vertical_gap_ratio": 0.4521,
+      "back_text_occlusion_ratio": 0.0,
+      "back_text_max_occlusion_ratio": 0.0,
+      "back_text_word_occlusion_ratios": [
+        0.0,
+        0.0
+      ]
+    },
+    "clipping_penalty": 0.0,
+    "score": 0.9439
+  }
+}

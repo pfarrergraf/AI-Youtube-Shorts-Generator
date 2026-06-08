@@ -28,7 +28,23 @@ Components/
 
 models/                  # DNN face detector weights (deploy.prototxt + caffemodel)
 automation/              # Runtime state: history JSON, overnight state, logs (gitignored)
+
+Components/ComfyUIBackground.py   # ComfyUI bridge: backgrounds, img2img edits, generic API-workflow runner
+comfyui_bridge_cli.py             # CLI over the bridge: status | background | edit | run | list
 ```
+
+## ComfyUI Bridge
+
+`Components/ComfyUIBackground.py` talks to a running ComfyUI server (default `http://127.0.0.1:8188`, served from `/home/benjamin_graf/ComfyUI`, auto-detected via `~/ComfyUI` or `PARAKEET_COMFYUI_ROOT`).
+
+- `generate_background_image(...)` — text→image; auto-wired into the `bold_minimal` thumbnail template in `Components/ThumbnailMoveChurch.py`.
+- `generate_edited_image(...)` — img2img restyle/edit; uploads the frame via `/upload/image`, runs an API-format graph on `sd_xl_turbo_1.0_fp16.safetensors`.
+- `run_api_workflow(workflow_dict, ...)` — submit any **API-format** workflow and ingest the output image.
+- `check_server(...)`, `detect_workflow_format(path)` (returns `api` | `ui` | `other`).
+
+Run the CLI from this dir (`python comfyui_bridge_cli.py status`). Verify with `pytest tests/test_comfyui_edit.py tests/test_comfyui_bridge_cli.py -q` (server-free). All entry points fall back gracefully when the server is down (background → procedural gradient, edit → unmodified source).
+
+**Constraint:** only API-format JSON (flat `{node_id: {class_type, inputs}}`) runs via `/prompt`; UI-graph exports (`blueprints/*.json`, most `C:\ComfyUI\...\workflows`) do not — re-save them via **Save (API Format)** first.
 
 ## Build and Test
 

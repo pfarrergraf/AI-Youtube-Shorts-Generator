@@ -42,8 +42,8 @@ _FONT_CANDIDATES = [
 ]
 
 # Thumbnail text sizing
-_THUMB_FONT_RATIO = 0.10  # bigger than cinematic
-_THUMB_MAX_TEXT_W_RATIO = 0.84  # 8% safe margin each side (was 0.88)
+_THUMB_FONT_RATIO = 0.115  # slightly larger for stronger hooks on thumbnails
+_THUMB_MAX_TEXT_W_RATIO = 0.82  # slightly tighter max width to avoid overflow on curves
 
 # Cinematic defaults (kept from previous version)
 _CINE_BLUR_RADIUS = 25

@@ -5,6 +5,9 @@ import random
 import subprocess
 
 
+_DEFAULT_VERTICAL_ANCHOR_RATIO = 0.5
+
+
 NVENC_FLAGS = [
     "-c:v",
     "h264_nvenc",
@@ -168,19 +171,68 @@ def _plan_camera_effects(total_frames, fps):
     return effects
 
 
-def _apply_zoom_crop(frame, x_pos, zoom, vertical_width, vertical_height,
-                     original_width, original_height, x_offset=0,
-                     out_w=None, out_h=None):
-    """Crop a zoomed region centered on face position, return resized to output dims."""
+def _resolve_crop_window(
+    x_pos,
+    zoom,
+    vertical_width,
+    vertical_height,
+    original_width,
+    original_height,
+    x_offset=0,
+    vertical_anchor_ratio=_DEFAULT_VERTICAL_ANCHOR_RATIO,
+):
+    zoom = max(1.0, float(zoom or 1.0))
+    anchor = max(0.0, min(1.0, float(vertical_anchor_ratio)))
     crop_w = int(vertical_width / zoom)
     crop_h = int(vertical_height / zoom)
-    crop_w -= crop_w % 2
-    crop_h -= crop_h % 2
+    crop_w = max(2, crop_w - (crop_w % 2))
+    crop_h = max(2, crop_h - (crop_h % 2))
 
-    zx = x_pos + (vertical_width - crop_w) // 2 + x_offset
-    zy = (original_height - crop_h) // 2
+    zx = int(x_pos + (vertical_width - crop_w) // 2 + x_offset)
+    zy_slack = max(0, original_height - crop_h)
+    zy = int(round(zy_slack * anchor))
     zx = max(0, min(zx, original_width - crop_w))
     zy = max(0, min(zy, original_height - crop_h))
+    return zx, zy, crop_w, crop_h
+
+
+def _effect_vertical_anchor_ratio(
+    base_anchor_ratio,
+    *,
+    effect_type=None,
+    zoom=1.0,
+):
+    """Lift jump-cut close-ups upward so the head sits lower in frame.
+
+    Smaller anchor ratios move the crop window higher in the source frame,
+    which restores headroom in aggressive close-ups.
+    """
+    anchor = max(0.0, min(1.0, float(base_anchor_ratio)))
+    zoom = max(1.0, float(zoom or 1.0))
+    if effect_type == "jump_close":
+        lift = min(0.16, 0.08 + (zoom - 1.0) * 0.20)
+        return max(0.18, anchor - lift)
+    if effect_type == "jump_mid":
+        lift = min(0.10, 0.04 + (zoom - 1.0) * 0.12)
+        return max(0.22, anchor - lift)
+    return anchor
+
+
+def _apply_zoom_crop(frame, x_pos, zoom, vertical_width, vertical_height,
+                     original_width, original_height, x_offset=0,
+                     out_w=None, out_h=None,
+                     vertical_anchor_ratio=_DEFAULT_VERTICAL_ANCHOR_RATIO):
+    """Crop a zoomed region centered on face position, return resized to output dims."""
+    zx, zy, crop_w, crop_h = _resolve_crop_window(
+        x_pos,
+        zoom,
+        vertical_width,
+        vertical_height,
+        original_width,
+        original_height,
+        x_offset=x_offset,
+        vertical_anchor_ratio=vertical_anchor_ratio,
+    )
 
     cropped = frame[zy:zy + crop_h, zx:zx + crop_w]
     rw = out_w if out_w else vertical_width
@@ -189,7 +241,8 @@ def _apply_zoom_crop(frame, x_pos, zoom, vertical_width, vertical_height,
 
 
 def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=True,
-                     target_height=1920):
+                     target_height=1920, base_zoom=1.0,
+                     vertical_anchor_ratio=_DEFAULT_VERTICAL_ANCHOR_RATIO):
     """Crop video to vertical 9:16 format with professional camera tracking and effects.
 
     Face tracking runs at native resolution for accuracy.  The final output is
@@ -224,6 +277,8 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
     if not fps or fps <= 0:
         fps = 30.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    base_zoom = max(1.0, float(base_zoom or 1.0))
+    vertical_anchor_ratio = max(0.0, min(1.0, float(vertical_anchor_ratio)))
 
     # Native crop dimensions (face tracking at source resolution)
     vertical_height = original_height
@@ -237,6 +292,11 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
     out_w = out_w - (out_w % 2)
     out_h = out_h - (out_h % 2)
     print(f"Output dimensions: {out_w}x{out_h} (native crop: {vertical_width}x{vertical_height})")
+    if base_zoom > 1.001 or abs(vertical_anchor_ratio - _DEFAULT_VERTICAL_ANCHOR_RATIO) > 0.001:
+        print(
+            f"Applying base reframe: zoom={base_zoom:.3f}, "
+            f"vertical_anchor={vertical_anchor_ratio:.2f}"
+        )
 
     if original_width < vertical_width:
         print("Error: Original video width is less than the desired vertical width.")
@@ -367,31 +427,71 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
 
             if etype == "jump_close":
                 # Hold an instant close-up — no ramp, no slow zoom.
-                zoom_target = eparams["zoom"]
+                zoom_target = max(base_zoom, eparams["zoom"])
+                anchor_ratio = _effect_vertical_anchor_ratio(
+                    vertical_anchor_ratio,
+                    effect_type=etype,
+                    zoom=zoom_target,
+                )
                 cropped = _apply_zoom_crop(frame, x_pos, zoom_target,
                                            vertical_width, vertical_height,
                                            original_width, original_height,
-                                           out_w=out_w, out_h=out_h)
+                                           out_w=out_w, out_h=out_h,
+                                           vertical_anchor_ratio=anchor_ratio)
 
             elif etype == "jump_mid":
                 # Hold an instant mid-shot — no ramp, no slow zoom.
-                zoom_target = eparams["zoom"]
+                zoom_target = max(base_zoom, eparams["zoom"])
+                anchor_ratio = _effect_vertical_anchor_ratio(
+                    vertical_anchor_ratio,
+                    effect_type=etype,
+                    zoom=zoom_target,
+                )
                 cropped = _apply_zoom_crop(frame, x_pos, zoom_target,
                                            vertical_width, vertical_height,
                                            original_width, original_height,
-                                           out_w=out_w, out_h=out_h)
+                                           out_w=out_w, out_h=out_h,
+                                           vertical_anchor_ratio=anchor_ratio)
             else:
                 # Fallback: normal crop
+                if base_zoom > 1.001 or abs(vertical_anchor_ratio - _DEFAULT_VERTICAL_ANCHOR_RATIO) > 0.001:
+                    cropped = _apply_zoom_crop(
+                        frame,
+                        x_pos,
+                        base_zoom,
+                        vertical_width,
+                        vertical_height,
+                        original_width,
+                        original_height,
+                        out_w=out_w,
+                        out_h=out_h,
+                        vertical_anchor_ratio=vertical_anchor_ratio,
+                    )
+                else:
+                    x_start = max(0, min(x_pos, original_width - vertical_width))
+                    cropped = frame[:, x_start:x_start + vertical_width]
+                    cropped = cv2.resize(cropped, (out_w, out_h),
+                                         interpolation=cv2.INTER_LANCZOS4)
+        else:
+            # Normal tracking — no effect active
+            if base_zoom > 1.001 or abs(vertical_anchor_ratio - _DEFAULT_VERTICAL_ANCHOR_RATIO) > 0.001:
+                cropped = _apply_zoom_crop(
+                    frame,
+                    x_pos,
+                    base_zoom,
+                    vertical_width,
+                    vertical_height,
+                    original_width,
+                    original_height,
+                    out_w=out_w,
+                    out_h=out_h,
+                    vertical_anchor_ratio=vertical_anchor_ratio,
+                )
+            else:
                 x_start = max(0, min(x_pos, original_width - vertical_width))
                 cropped = frame[:, x_start:x_start + vertical_width]
                 cropped = cv2.resize(cropped, (out_w, out_h),
                                      interpolation=cv2.INTER_LANCZOS4)
-        else:
-            # Normal tracking — no effect active
-            x_start = max(0, min(x_pos, original_width - vertical_width))
-            cropped = frame[:, x_start:x_start + vertical_width]
-            cropped = cv2.resize(cropped, (out_w, out_h),
-                                 interpolation=cv2.INTER_LANCZOS4)
 
         # Safety: ensure frame matches writer dimensions
         if cropped.shape[1] != out_w or cropped.shape[0] != out_h:
