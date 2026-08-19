@@ -5,6 +5,49 @@ description: Generate Move Church style thumbnails from a sermon video with a bu
 
 This skill turns thumbnail generation into a quality loop: **generate → score → critique → iterate → deliver**. Never hand the user the first render without reading its report.
 
+## Production standard (August 2026)
+
+For normal production and backlog repair, use `--thumbnail-mode v2`. V2 selects a
+reviewed, text-free AI hero from `assets/speaker_references/` for known speakers,
+places the exact headline on the empty side, and hard-rejects candidates whose
+text panel intersects the expanded face-safe zone. The image model must never
+render the headline itself. `legacy`, `v2_test`, and `epic` are comparison modes.
+
+For finished clips waiting in the upload folders, use the non-destructive batch
+tool; it backs up existing thumbnail siblings before replacing them:
+
+```bash
+python tools/regenerate_pending_thumbnails.py
+python -m cli.parakeet cloud-sync --brand latzel --direct-r2
+python -m cli.parakeet cloud-sync --brand movechurch --direct-r2
+```
+
+The supported upload path is direct R2 queueing. The former local watchfolder
+publishing daemons are retired and must not be restarted.
+
+## Two renderers — pick the right one
+
+| | Legacy (below, 8 templates) | `epic` (reference-look) |
+|---|---|---|
+| Look | Depth-layered mega-stack, drop shadow + glow + extrude | Huge per-line-filled type, no contour, one light source, chiaroscuro |
+| Gate | Scalar score only, no pass/fail | `Components/ThumbnailReferenceGate.py`, bands fitted to `thumbnail_ideal_examples/` |
+| Speaker | rembg/birefnet cutout | ComfyUI `PersonMaskUltra V2` (falls back to rembg when ComfyUI is down) |
+| CLI | `generate_thumbnail.py` | `thumbnail_lab.py` (sweep) or `--thumbnail-mode epic` in `parakeet shorts` |
+
+Default to **`epic`** for a fresh "make this look better" ask — that is the gap the user actually measured (references at ~250 peak-luma / 11% blown highlights vs. our old ~165 / 1%). Use the legacy 8-template path only when the user explicitly wants one of those named styles, or is iterating on an existing legacy render.
+
+### `epic` quick start
+
+```bash
+python thumbnail_lab.py --video "VIDEO.mp4" --hooks 8 --title "Sermon title" --all-variants --contact-sheet
+```
+
+Sweeps every mood (`warm_shaft, gold_burst, cool_door, cyan_split, red_alert, white_stage`) x the real-speaker render paths (`frame_cinematic, real_procedural, real_relight, ai_plate`), writes a labelled `thumbnail_contact_sheet.png`, and a `thumbnail_lab_report.json` with each variant's gate verdict. The lab defaults to the `closeup` speaker layout; use `--speaker-layout portrait --text-anchor bottom` for the reference-like face-above/title-below composition. `--hooks N` calls `LanguageTasks.GenerateThumbnailAngles` for N grounded, distinct hooks; without it, pass `--hook "..." --accent-line N` directly.
+
+The synthetic `ai_hero` path is intentionally excluded from the sweep: SDXL invents a generic or distorted face instead of preserving the real speaker. Do not use it for named real people.
+
+Read `thumbnail_lab_report.json`'s `gate.out_of_band` before delivering — a variant with entries there is outside the reference distribution on that metric (type too small, no highlight, wrong dark/light balance, etc.).
+
 ## Setup
 
 ```bash
@@ -82,7 +125,8 @@ Iterate at most 2 rounds; report what changed and why. If `provider_used` is `gr
 
 - Read the final PNG(s) to visually verify: no clipped text, face visible, depth effect intact.
 - Send the winner (and up to 2 runners-up) to the user via SendUserFile with the score in the caption.
-- Name outputs after the video stem; never overwrite an existing thumbnail the user picked earlier.
+- Name outputs after the video stem. The backlog tool preserves existing files in
+  `_thumbnail_backups/<date>/` before updating a sibling thumbnail.
 
 ## Testing after any code change to the thumbnail modules
 

@@ -1,0 +1,24 @@
+{
+  "provider": "codex_hosted_imagegen",
+  "created": "2026-08-14",
+  "status": "manual_review_required",
+  "outputs": [
+    {
+      "path": "thomas_herrmann_candidate_right_gold_teal_v1.png",
+      "variant": "right_gold_teal_candidate"
+    },
+    {
+      "path": "thomas_herrmann_candidate_close_red_cyan_v1.png",
+      "variant": "close_red_cyan_confrontation_candidate"
+    },
+    {
+      "path": "thomas_herrmann_candidate_doorway_calling_v1.png",
+      "variant": "doorway_calling_candidate"
+    }
+  ],
+  "references": [
+    "../../source/thomas_herrmann_official_movechurch.jpg",
+    "../../source/thomas_herrmann_stage_movechurch.jpg"
+  ],
+  "prompt_summary": "Three identity-preserving, photorealistic 9:16 sermon heroes: calm gold/teal stage, confrontational red/cyan close-up, and monumental doorway/calling composition. Each keeps a separate negative-space region for deterministic typography and contains no text, logo, watermark, captions or lower third."
+}

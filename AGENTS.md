@@ -46,6 +46,17 @@ Run the CLI from this dir (`python comfyui_bridge_cli.py status`). Verify with `
 
 **Constraint:** only API-format JSON (flat `{node_id: {class_type, inputs}}`) runs via `/prompt`; UI-graph exports (`blueprints/*.json`, most `C:\ComfyUI\...\workflows`) do not — re-save them via **Save (API Format)** first.
 
+## Speaker hero repertoire
+
+Use `assets/speaker_references/manifest.json` as the source of truth for
+speaker identity references and reviewed, text-free AI hero plates. Reuse a
+speaker hero before generating a new one. The image model must never render
+the final headline; add exact typography afterward with Pillow. Codex's hosted
+imagegen does not use the workstation GPU and is not callable from this app's
+internal quota. App-triggered generation must use an explicit local ComfyUI or
+separate OpenAI API provider, save the result under the speaker's repertoire,
+and pass an identity/readability quality gate before promotion.
+
 ## Build and Test
 
 Run these commands from the repository root in PowerShell.
@@ -70,6 +81,14 @@ After the torch stack validates on either path, run the repo smoke tests:
 .venv\Scripts\python.exe -c "from Components.LanguageTasks import GetHighlight; print('LLM module OK')"
 .venv\Scripts\python.exe .\main.py 'path\to\video.mp4' --auto-approve
 ```
+
+## Thumbnail V2 production rule
+
+V2 ist der Produktionsstandard. Der Textblock muss vollständig außerhalb der
+konservativen Face-Safe-Zone liegen; Varianten mit Face-Overlap werden hart
+verworfen. `final_ab_v2` ist die visuelle Referenz: Sprecher/Hero auf einer
+Seite, Hook klar auf der anderen. Textfreie Sprecher-Heroes liegen in
+`assets/speaker_references/` und werden deterministisch aus dem Manifest gewählt.
 
 ## Conventions
 

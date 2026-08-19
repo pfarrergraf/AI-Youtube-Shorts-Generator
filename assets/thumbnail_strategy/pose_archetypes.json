@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "poses": [
+    {
+      "id": "empathic_open",
+      "emotion": "warm empathy",
+      "expression": "soft attentive eyes, compassionate half-smile",
+      "gesture": "one open palm toward the viewer, shoulders relaxed",
+      "framing": "chest-up",
+      "best_for": ["comfort", "grace", "belonging", "healing"],
+      "lighting": "soft warm key from the text side, subtle cyan rim",
+      "palette": ["amber", "deep navy", "ivory"]
+    },
+    {
+      "id": "battle_ready",
+      "emotion": "determined courage",
+      "expression": "focused eyes, jaw set without caricature",
+      "gesture": "raised compact fist, microphone held low",
+      "framing": "waist-up",
+      "best_for": ["overcoming", "spiritual battle", "perseverance", "David and Goliath"],
+      "lighting": "hard red rim against cool blue backlight",
+      "palette": ["crimson", "cyan", "charcoal"]
+    },
+    {
+      "id": "point_to_heaven",
+      "emotion": "reverent certainty",
+      "expression": "eyes lifted, quiet conviction",
+      "gesture": "one index finger pointing upward, other hand holding microphone",
+      "framing": "waist-up",
+      "best_for": ["heaven", "God's sovereignty", "prayer", "eternity"],
+      "lighting": "single white-gold shaft from above matching the raised hand",
+      "palette": ["white-gold", "midnight blue", "black"]
+    },
+    {
+      "id": "compassion_near_tears",
+      "emotion": "deep compassion near tears",
+      "expression": "moist eyes, restrained grief, no melodramatic crying",
+      "gesture": "hand over heart, body leaning slightly forward",
+      "framing": "tight chest-up",
+      "best_for": ["loss", "loneliness", "the lost sheep", "lament", "pastoral care"],
+      "lighting": "soft side key with cool shadow and warm eye light",
+      "palette": ["muted gold", "slate blue", "burgundy"]
+    },
+    {
+      "id": "righteous_anger",
+      "emotion": "righteous anger",
+      "expression": "intense eyes and forceful speech, not hatred",
+      "gesture": "strong open chopping hand, torso turning into the gesture",
+      "framing": "chest-up",
+      "best_for": ["injustice", "hypocrisy", "warning", "breaking chains"],
+      "lighting": "strong crimson edge light and narrow neutral face key",
+      "palette": ["red", "black", "cold white"]
+    },
+    {
+      "id": "urgent_warning",
+      "emotion": "urgent warning",
+      "expression": "wide alert eyes, brows tense",
+      "gesture": "open stop hand toward the viewer",
+      "framing": "tight portrait with foreground hand",
+      "best_for": ["danger", "temptation", "end times", "consequences"],
+      "lighting": "red warning glow behind, cyan separation on face edge",
+      "palette": ["signal red", "cyan", "near black"]
+    },
+    {
+      "id": "joyful_breakthrough",
+      "emotion": "joyful breakthrough",
+      "expression": "authentic broad smile, bright eyes",
+      "gesture": "one arm opened outward as if celebrating answered prayer",
+      "framing": "waist-up",
+      "best_for": ["breakthrough", "resurrection", "freedom", "celebration"],
+      "lighting": "radiant gold backlight and clean warm face key",
+      "palette": ["gold", "azure", "ivory"]
+    },
+    {
+      "id": "astonished_revelation",
+      "emotion": "astonished revelation",
+      "expression": "surprised recognition, eyebrows raised",
+      "gesture": "one hand near temple, the other open as a discovery gesture",
+      "framing": "chest-up",
+      "best_for": ["hidden truth", "revelation", "unexpected answer", "mystery"],
+      "lighting": "narrow light appearing from darkness on the discovery side",
+      "palette": ["teal", "gold", "black"]
+    },
+    {
+      "id": "prayerful_surrender",
+      "emotion": "prayerful surrender",
+      "expression": "eyes closed or lowered, peaceful seriousness",
+      "gesture": "both hands gently open at chest height",
+      "framing": "waist-up",
+      "best_for": ["surrender", "prayer", "trust", "Gethsemane"],
+      "lighting": "moon-cool ambient light with a soft warm key from above",
+      "palette": ["moon blue", "warm gold", "charcoal"]
+    },
+    {
+      "id": "direct_challenge",
+      "emotion": "personal challenge",
+      "expression": "direct eye contact, confident concern",
+      "gesture": "index finger or open hand reaching toward the viewer",
+      "framing": "tight portrait with foreshortened foreground hand",
+      "best_for": ["decision", "calling", "identity", "discipleship"],
+      "lighting": "split red and cyan rim with neutral face exposure",
+      "palette": ["red", "cyan", "black"]
+    },
+    {
+      "id": "protective_pastor",
+      "emotion": "protective resolve",
+      "expression": "concerned but steady gaze",
+      "gesture": "one arm extended sideways as a protective barrier",
+      "framing": "three-quarter body",
+      "best_for": ["shepherd", "protection", "family", "Daniel in the lions' den"],
+      "lighting": "warm key on the protected side, dark threat-side rim",
+      "palette": ["bronze", "deep blue", "black"]
+    },
+    {
+      "id": "hopeful_invitation",
+      "emotion": "hopeful invitation",
+      "expression": "gentle smile and expectant upward gaze",
+      "gesture": "one hand on heart, one hand inviting toward a light source",
+      "framing": "three-quarter body",
+      "best_for": ["calling", "new beginning", "prodigal son", "heavenly banquet"],
+      "lighting": "large white-gold doorway or dawn source with matched rim light",
+      "palette": ["white-gold", "navy", "amber"]
+    }
+  ]
+}

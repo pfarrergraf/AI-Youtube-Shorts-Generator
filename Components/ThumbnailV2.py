@@ -67,9 +67,8 @@ def _find_font() -> str | None:
     candidates = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
         "/usr/share/fonts/truetype/ubuntu/Ubuntu-Bold.ttf",
-        "C:/Windows/Fonts/arialbd.ttf",
-        "C:/Windows/Fonts/calibrib.ttf",
     ]
     for path in candidates:
         if os.path.isfile(path):
@@ -102,9 +101,14 @@ def _wrap_text(text: str, font, max_width: int, draw: ImageDraw.ImageDraw) -> li
 
 
 def _sanitize_hook(text: str) -> str:
-    cleaned = " ".join(str(text or "").strip().split())
-    cleaned = cleaned.upper()[:34].strip()
-    return cleaned or _DEFAULT_HOOK
+    cleaned = " ".join(str(text or "").strip().split()).upper()
+    # A hard character-count slice can (and did — verified: "ABGELEHNT, ABER
+    # NICHT BESIEGT" rendered as "...BESIEG", the final word cut mid-letter)
+    # land inside a word. Back up to the last space so truncation only ever
+    # drops whole trailing words, never part of one.
+    if len(cleaned) > 34:
+        cleaned = cleaned[:34].rsplit(" ", 1)[0] or cleaned[:34]
+    return cleaned.strip() or _DEFAULT_HOOK
 
 
 def _sanitize_keyword(hook_text: str, accent_keyword: str) -> str:
@@ -287,6 +291,40 @@ def _text_side(width: int, face_box: tuple[int, int, int, int] | None, brief: di
     return "left" if center_x > width * 0.5 else "right"
 
 
+def _face_safe_rect(
+    face_box: tuple[int, int, int, int] | None,
+    width: int,
+    height: int,
+) -> tuple[int, int, int, int] | None:
+    """Return a conservative head/upper-torso exclusion zone for typography.
+
+    The title must never be placed over the speaker's face.  Haar only returns
+    the face rectangle, so we expand it slightly to cover hair, neck, and the
+    natural breathing room around the head.  The box is intentionally not a
+    full-body exclusion zone: the lower third may still use empty clothing or
+    background when the face is higher in frame.
+    """
+    if not face_box:
+        return None
+    fx, fy, fw, fh = (int(v) for v in face_box)
+    left = max(0, int(fx - fw * 0.25))
+    top = max(0, int(fy - fh * 0.25))
+    right = min(width, int(fx + fw * 1.25))
+    bottom = min(height, int(fy + fh * 1.35))
+    return left, top, max(left + 1, right), max(top + 1, bottom)
+
+
+def _rect_intersection_area(
+    first: tuple[int, int, int, int],
+    second: tuple[int, int, int, int],
+) -> int:
+    left = max(first[0], second[0])
+    top = max(first[1], second[1])
+    right = min(first[2], second[2])
+    bottom = min(first[3], second[3])
+    return max(0, right - left) * max(0, bottom - top)
+
+
 def _compose_variant(
     frame_bgr: np.ndarray,
     *,
@@ -311,7 +349,16 @@ def _compose_variant(
     safe_margin_bottom = int(height * 0.05)
     font_size = int(height * (0.104 if variant != "emotion_first" else 0.108))
     font = _load_font(font_size)
-    max_width = int(width * (0.82 if variant != "emotion_first" else 0.84))
+    # With a detected face, the title gets its own side of the frame.  The old
+    # 82–84% width made the panel cross the face even when ``text_side`` was
+    # correct; 0.44 swung too far the other way and forced long German
+    # compound hooks (e.g. "GERECHTIGKEIT OHNE GNADE?") down to font_size ~50,
+    # noticeably smaller than the rest of a batch (verified: 0.58 recovers
+    # ~font_size 63 for that exact hook, comfortably legible, while staying
+    # well short of the 0.82 width that used to cross the face).
+    max_width = int(width * (
+        0.58 if face_box is not None else (0.82 if variant != "emotion_first" else 0.84)
+    ))
     tmp = Image.new("RGBA", (1, 1))
     tmp_draw = ImageDraw.Draw(tmp)
     allowed_lines = 3
@@ -336,27 +383,50 @@ def _compose_variant(
         (_measure_line_width(line, font, tmp_draw, accent, font_size) for line in lines),
         default=max_width,
     )
-    box_y = int(height * (0.60 if variant != "emotion_first" else 0.58))
+    preferred_box_y = int(height * (0.60 if variant != "emotion_first" else 0.58))
 
     brand_font_size = max(24, font_size // 3)
     brand_font = _load_font(brand_font_size)
     brand_bbox = tmp_draw.textbbox((0, 0), brand_label, font=brand_font)
-    while brand_font_size > 18 and (brand_bbox[2] - brand_bbox[0]) > max_width:
+    while brand_font_size > 18 and (brand_bbox[2] - brand_bbox[0]) + 34 > max_width:
         brand_font_size -= 2
         brand_font = _load_font(brand_font_size)
         brand_bbox = tmp_draw.textbbox((0, 0), brand_label, font=brand_font)
 
-    content_width = max(rendered_width, (brand_bbox[2] - brand_bbox[0]) + 34)
-    box_x = max(safe_margin_x, min(width - safe_margin_x - content_width, (width - content_width) // 2))
+    content_width = min(max_width, max(rendered_width, (brand_bbox[2] - brand_bbox[0]) + 34))
+    if text_side == "left":
+        box_x = safe_margin_x
+    elif text_side == "right":
+        box_x = width - safe_margin_x - content_width
+    else:
+        box_x = (width - content_width) // 2
+    box_x = max(safe_margin_x, min(width - safe_margin_x - content_width, box_x))
+
+    face_safe_box = _face_safe_rect(face_box, width, height)
+
+    def _panel_for(y_pos: int) -> list[int]:
+        return [
+            box_x - 22,
+            y_pos - 22,
+            min(width - safe_margin_x, box_x + content_width + 22),
+            min(height - safe_margin_bottom, y_pos + total_height + 102),
+        ]
+
+    # Prefer the lower-third position, but move the whole panel when a low
+    # camera angle or an unusually low face would otherwise cause an overlap.
+    y_candidates = [preferred_box_y, int(height * 0.08), int(height * 0.40)]
+    box_y = preferred_box_y
+    panel = _panel_for(box_y)
+    if face_safe_box is not None:
+        for candidate_y in y_candidates:
+            candidate_panel = _panel_for(candidate_y)
+            if _rect_intersection_area(tuple(candidate_panel), face_safe_box) == 0:
+                box_y = candidate_y
+                panel = candidate_panel
+                break
 
     overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
-    panel = [
-        box_x - 22,
-        box_y - 22,
-        min(width - safe_margin_x, box_x + content_width + 22),
-        min(height - safe_margin_bottom, box_y + total_height + 102),
-    ]
     panel_fill = (6, 10, 16, 112 if variant == "clean_editorial" else 138)
     overlay_draw.rounded_rectangle(panel, radius=34, fill=panel_fill)
     overlay = overlay.filter(ImageFilter.GaussianBlur(radius=1.4))
@@ -387,7 +457,11 @@ def _compose_variant(
             ]
             draw.rounded_rectangle(chip_rect, radius=22, fill=palette["chip_bg"])
             draw.text((box_x + prefix_w, y_pos), accent, font=font, fill=palette["chip_fg"])
-            draw.text((box_x + prefix_w + accent_w, y_pos), suffix, font=font, fill=fill)
+            # Start the suffix at the chip's own right edge (chip_pad_x past
+            # the accent word), not flush against the accent text — flush
+            # crowded the next character into/past the chip's rounded corner
+            # (visible as e.g. "STÜRME|N" with the N overlapping the chip).
+            draw.text((box_x + prefix_w + accent_w + chip_pad_x, y_pos), suffix, font=font, fill=fill)
         else:
             bbox = draw.textbbox((box_x, y_pos), line, font=font)
             text_bboxes.append((bbox[0], bbox[1], bbox[2], bbox[3]))
@@ -414,6 +488,17 @@ def _compose_variant(
             max(text_bounds[3], bbox[3]),
         )
 
+    panel_tuple = tuple(int(v) for v in panel)
+    collision_area = (
+        _rect_intersection_area(panel_tuple, face_safe_box)
+        if face_safe_box is not None else 0
+    )
+    panel_area = max(1, (panel[2] - panel[0]) * (panel[3] - panel[1]))
+    face_collision_ratio = collision_area / float(panel_area)
+    hard_failures = []
+    if collision_area > 0:
+        hard_failures.append("text_panel_overlaps_face_safe_zone")
+
     metadata = {
         "variant": variant,
         "speaker_side": "left" if text_side == "right" else "right",
@@ -422,6 +507,10 @@ def _compose_variant(
         "accent_keyword": accent,
         "subject_coverage": round(subject_coverage, 4),
         "face_box": list(face_box) if face_box else None,
+        "face_safe_box": list(face_safe_box) if face_safe_box else None,
+        "face_collision_ratio": round(face_collision_ratio, 6),
+        "face_collision_penalty": round(min(1.0, face_collision_ratio * 4.0), 4),
+        "hard_failures": hard_failures,
         "text_bounds": [int(v) for v in text_bounds],
         "panel": [int(v) for v in panel],
         "brand_label": brand_label,
@@ -588,7 +677,12 @@ def render_thumbnail_v2_assets(
             metadata["score"] = round(float(metadata["score"]) + 0.02, 4)
         candidates.append(metadata)
 
-    best = max(candidates, key=lambda item: float(item.get("score") or 0.0))
+    safe_candidates = [item for item in candidates if not item.get("hard_failures")]
+    if not safe_candidates:
+        raise RuntimeError(
+            "Thumbnail V2 quality gate rejected every variant: text overlaps the detected face"
+        )
+    best = max(safe_candidates, key=lambda item: float(item.get("score") or 0.0))
     shutil.copy2(best["image_path"], thumb_path)
     selected_path = variant_root / "selected.jpg"
     shutil.copy2(best["image_path"], selected_path)

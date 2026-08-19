@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-19",
+  "speaker_key": "leo_bigger_icf",
+  "display_name": "Leo Bigger",
+  "status": "prepared",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/leo_bigger_icf/source/leo_bigger_stage_gesture_wide.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/leo_bigger_icf/source/leo_bigger_stage_portrait.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/leo_bigger_icf/source/leo_bigger_stage_portrait_small.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/leo_bigger_icf/source/leo_bigger_headshot_smiling.jpg"
+  ],
+  "jobs": [
+    {
+      "pose_id": "empathic_open",
+      "prompt_path": "empathic_open.prompt.txt",
+      "output": "leo_bigger_icf_empathic_open_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "battle_ready",
+      "prompt_path": "battle_ready.prompt.txt",
+      "output": "leo_bigger_icf_battle_ready_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "point_to_heaven",
+      "prompt_path": "point_to_heaven.prompt.txt",
+      "output": "leo_bigger_icf_point_to_heaven_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "compassion_near_tears",
+      "prompt_path": "compassion_near_tears.prompt.txt",
+      "output": "leo_bigger_icf_compassion_near_tears_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "righteous_anger",
+      "prompt_path": "righteous_anger.prompt.txt",
+      "output": "leo_bigger_icf_righteous_anger_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "urgent_warning",
+      "prompt_path": "urgent_warning.prompt.txt",
+      "output": "leo_bigger_icf_urgent_warning_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "joyful_breakthrough",
+      "prompt_path": "joyful_breakthrough.prompt.txt",
+      "output": "leo_bigger_icf_joyful_breakthrough_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "astonished_revelation",
+      "prompt_path": "astonished_revelation.prompt.txt",
+      "output": "leo_bigger_icf_astonished_revelation_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "prayerful_surrender",
+      "prompt_path": "prayerful_surrender.prompt.txt",
+      "output": "leo_bigger_icf_prayerful_surrender_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "direct_challenge",
+      "prompt_path": "direct_challenge.prompt.txt",
+      "output": "leo_bigger_icf_direct_challenge_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "protective_pastor",
+      "prompt_path": "protective_pastor.prompt.txt",
+      "output": "leo_bigger_icf_protective_pastor_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "hopeful_invitation",
+      "prompt_path": "hopeful_invitation.prompt.txt",
+      "output": "leo_bigger_icf_hopeful_invitation_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    }
+  ]
+}

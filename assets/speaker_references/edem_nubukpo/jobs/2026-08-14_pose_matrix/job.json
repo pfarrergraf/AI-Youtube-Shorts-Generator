@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-14",
+  "speaker_key": "edem_nubukpo",
+  "display_name": "Edem Nubukpo",
+  "status": "prepared",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/edem_nubukpo/source/edem_nubukpo_team_movechurch.jpeg"
+  ],
+  "jobs": [
+    {
+      "pose_id": "empathic_open",
+      "prompt_path": "empathic_open.prompt.txt",
+      "output": "edem_nubukpo_empathic_open_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "battle_ready",
+      "prompt_path": "battle_ready.prompt.txt",
+      "output": "edem_nubukpo_battle_ready_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "point_to_heaven",
+      "prompt_path": "point_to_heaven.prompt.txt",
+      "output": "edem_nubukpo_point_to_heaven_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "compassion_near_tears",
+      "prompt_path": "compassion_near_tears.prompt.txt",
+      "output": "edem_nubukpo_compassion_near_tears_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "righteous_anger",
+      "prompt_path": "righteous_anger.prompt.txt",
+      "output": "edem_nubukpo_righteous_anger_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "urgent_warning",
+      "prompt_path": "urgent_warning.prompt.txt",
+      "output": "edem_nubukpo_urgent_warning_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "joyful_breakthrough",
+      "prompt_path": "joyful_breakthrough.prompt.txt",
+      "output": "edem_nubukpo_joyful_breakthrough_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "astonished_revelation",
+      "prompt_path": "astonished_revelation.prompt.txt",
+      "output": "edem_nubukpo_astonished_revelation_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "prayerful_surrender",
+      "prompt_path": "prayerful_surrender.prompt.txt",
+      "output": "edem_nubukpo_prayerful_surrender_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "direct_challenge",
+      "prompt_path": "direct_challenge.prompt.txt",
+      "output": "edem_nubukpo_direct_challenge_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "protective_pastor",
+      "prompt_path": "protective_pastor.prompt.txt",
+      "output": "edem_nubukpo_protective_pastor_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "hopeful_invitation",
+      "prompt_path": "hopeful_invitation.prompt.txt",
+      "output": "edem_nubukpo_hopeful_invitation_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    }
+  ]
+}

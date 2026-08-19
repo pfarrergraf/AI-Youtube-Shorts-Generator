@@ -1,0 +1,410 @@
+{
+  "schema_version": 1,
+  "default_policy": "repertoire_first",
+  "speakers": {
+    "leo_bigger_icf": {
+      "display_name": "Leo Bigger",
+      "source_images": [
+        {
+          "path": "leo_bigger_icf/source/leo_bigger_stage_gesture_wide.jpg",
+          "role": "gesture_and_stage_energy",
+          "source_url": "user_provided_2026-08-19"
+        },
+        {
+          "path": "leo_bigger_icf/source/leo_bigger_stage_portrait.jpg",
+          "role": "identity_and_gesture",
+          "source_url": "user_provided_2026-08-19"
+        },
+        {
+          "path": "leo_bigger_icf/source/leo_bigger_stage_portrait_small.jpg",
+          "role": "supporting_identity",
+          "source_url": "user_provided_2026-08-19"
+        },
+        {
+          "path": "leo_bigger_icf/source/leo_bigger_headshot_smiling.jpg",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-19"
+        }
+      ],
+      "heroes": [
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_empathic_open_v1.png",
+          "variant": "empathic_open",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_battle_ready_v1.png",
+          "variant": "battle_ready",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_point_to_heaven_v1.png",
+          "variant": "point_to_heaven",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_compassion_near_tears_v1.png",
+          "variant": "compassion_near_tears",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_righteous_anger_v1.png",
+          "variant": "righteous_anger",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_urgent_warning_v1.png",
+          "variant": "urgent_warning",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_joyful_breakthrough_v1.png",
+          "variant": "joyful_breakthrough",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_astonished_revelation_v1.png",
+          "variant": "astonished_revelation",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_hopeful_invitation_v1.png",
+          "variant": "hopeful_invitation",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_prayerful_surrender_v1.png",
+          "variant": "prayerful_surrender",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_protective_pastor_v1.png",
+          "variant": "protective_pastor",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "leo_bigger_icf/heroes/leo_bigger_icf_ai_direct_challenge_v1.png",
+          "variant": "direct_challenge",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        }
+      ]
+    },
+    "antonio_weil": {
+      "display_name": "Antonio Weil",
+      "source_images": [
+        {
+          "path": "antonio_weil/source/antonio_weil_portrait_cvents.jpg",
+          "role": "identity",
+          "source_url": "https://www.cvents.eu/media/artist/image/a/n/antonio_weil_4.jpg"
+        },
+        {
+          "path": "antonio_weil/source/antonio_weil_stage_cvents.jpg",
+          "role": "gesture_and_stage_energy",
+          "source_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQXQRICX_w2c5NQcsVO5asWzVCuBLPiArd6nEwqmowrVhiAo-BbX-QQ7wug&s=10"
+        },
+        {
+          "path": "antonio_weil/source/antonio_weil_with_wife_movechurch.jpg",
+          "role": "supporting_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/PAA-09969-Large.jpeg"
+        }
+      ],
+      "heroes": [
+        {
+          "path": "antonio_weil/heroes/antonio_weil_ai_gold_gesture_v1.png",
+          "variant": "gold_gesture",
+          "provider": "codex_hosted_imagegen",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "antonio_weil/heroes/antonio_weil_ai_blue_mic_v1.png",
+          "variant": "blue_mic",
+          "provider": "codex_hosted_imagegen",
+          "text_free": true,
+          "approved": true
+        }
+      ]
+    },
+    "olaf_latzel": {
+      "display_name": "Olaf Latzel",
+      "source_images": [
+        {
+          "path": "olaf_latzel/source/olaf_latzel_sermon_bibel_und_bekenntnis.jpg",
+          "role": "identity_and_sermon_pose",
+          "source_url": "https://www.bibelundbekenntnis.de/wp-content/uploads/2019/11/20191116_0072_B1_hr.jpg"
+        },
+        {
+          "path": "olaf_latzel/source/olaf_latzel_stage_cne.jpg",
+          "role": "gesture_and_stage_energy",
+          "source_url": "https://images.cne.news/fill/crop:2126:1329:sm/w:1020/plain/s3%3A%2F%2Fcne-prod-s3-001%2FLatzel_KERK_Z6_A6696_5f2b89db94.jpg"
+        }
+      ],
+      "heroes": [
+        {
+          "path": "olaf_latzel/heroes/olaf_latzel_ai_gold_stage_v1.png",
+          "variant": "gold_stage",
+          "provider": "codex_hosted_imagegen",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "olaf_latzel/heroes/olaf_latzel_ai_red_stage_v1.png",
+          "variant": "red_stage",
+          "provider": "codex_hosted_imagegen",
+          "text_free": true,
+          "approved": true
+        }
+      ]
+    },
+    "thomas_herrmann": {
+      "display_name": "Thomas Herrmann",
+      "source_images": [
+        {
+          "path": "thomas_herrmann/source/thomas_herrmann_official_movechurch.jpg",
+          "role": "identity_and_sermon_pose",
+          "source_url": "https://movechurch.de/wp-content/uploads/thomas-herrmann1_web_202576-960x720.jpg"
+        },
+        {
+          "path": "thomas_herrmann/source/thomas_herrmann_stage_movechurch.jpg",
+          "role": "supporting_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/Thomas-Herrmann_web_2025627Move-Church-768x614.jpg"
+        },
+        {
+          "path": "thomas_herrmann/source/pose_frames/01_empathic_open_palms.png",
+          "role": "real_video_identity_and_side_gesture",
+          "source_url": "https://www.youtube.com/watch?v=BVIuszW2Alc",
+          "source_timestamp_sec": 980
+        },
+        {
+          "path": "thomas_herrmann/source/pose_frames/02_urgent_lean_in.png",
+          "role": "real_video_identity_and_urgent_posture",
+          "source_url": "https://www.youtube.com/watch?v=BVIuszW2Alc",
+          "source_timestamp_sec": 2380
+        },
+        {
+          "path": "thomas_herrmann/source/pose_frames/05_raised_warning_hand.png",
+          "role": "real_video_identity_and_warning_gesture",
+          "source_url": "https://www.youtube.com/watch?v=BVIuszW2Alc",
+          "source_timestamp_sec": 1700
+        },
+        {
+          "path": "thomas_herrmann/source/pose_frames/09_open_hand_smile.png",
+          "role": "real_video_identity_and_open_hand",
+          "source_url": "https://www.youtube.com/watch?v=BVIuszW2Alc",
+          "source_timestamp_sec": 220
+        }
+      ],
+      "heroes": [
+        {
+          "path": "thomas_herrmann/heroes/thomas_herrmann_ai_gold_teal_v1.png",
+          "variant": "gold_teal",
+          "provider": "codex_hosted_imagegen",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Benjamin considers it usable as a secondary variant."
+        },
+        {
+          "path": "thomas_herrmann/jobs/2026-08-14_codex_hosted/thomas_herrmann_candidate_close_red_cyan_v1.png",
+          "variant": "close_red_cyan_confrontation_candidate",
+          "provider": "codex_hosted_imagegen",
+          "text_free": true,
+          "approved": false,
+          "review_note": "Rejected: identity is too far from the original Thomas Herrmann."
+        },
+        {
+          "path": "thomas_herrmann/heroes/thomas_herrmann_ai_doorway_calling_v1.png",
+          "variant": "doorway_calling",
+          "provider": "codex_hosted_imagegen",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Benjamin strongly approved the identity and composition."
+        }
+      ]
+    },
+    "andreas_herrmann": {
+      "display_name": "Andreas Herrmann",
+      "source_images": [
+        {
+          "path": "andreas_herrmann/source/andreas_herrmann_official_movechurch.jpg",
+          "role": "identity_and_sermon_pose",
+          "source_url": "https://movechurch.de/wp-content/uploads/andreas-herrmann-header_web_2025719-e1778599979738-1440x896.jpg"
+        },
+        {
+          "path": "andreas_herrmann/source/andreas_herrmann_stage_movechurch.jpg",
+          "role": "supporting_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/Andreas-Herrmann_web_2025627Move-Church-768x614.jpg"
+        }
+      ],
+      "heroes": [
+        {
+          "path": "andreas_herrmann/jobs/2026-08-14_codex_hosted/andreas_herrmann_candidate_left_blue_gold_v2.png",
+          "variant": "left_blue_gold_candidate",
+          "provider": "codex_hosted_imagegen",
+          "text_free": true,
+          "approved": false
+        },
+        {
+          "path": "andreas_herrmann/heroes/andreas_herrmann_ai_close_red_gold_v1.png",
+          "variant": "close_red_gold",
+          "provider": "codex_hosted_imagegen",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Benjamin approved the pose and identity."
+        },
+        {
+          "path": "andreas_herrmann/heroes/andreas_herrmann_ai_hope_beam_v1.png",
+          "variant": "hope_beam",
+          "provider": "codex_hosted_imagegen",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Benjamin approved the content fit for suitable hooks."
+        }
+      ]
+    },
+    "stefan_sommerfeld": {
+      "display_name": "Stefan Sommerfeld",
+      "source_images": [
+        {
+          "path": "stefan_sommerfeld/source/stefan_sommerfeld_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/PAA-01642-Large-960x720.jpeg"
+        }
+      ],
+      "heroes": []
+    },
+    "edem_nubukpo": {
+      "display_name": "Edem Nubukpo",
+      "source_images": [
+        {
+          "path": "edem_nubukpo/source/edem_nubukpo_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/PAA-07183-Large-960x720.jpeg"
+        }
+      ],
+      "heroes": []
+    },
+    "linus_trillitzsch": {
+      "display_name": "Linus Trillitzsch",
+      "source_images": [
+        {
+          "path": "linus_trillitzsch/source/linus_trillitzsch_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/PAA-07241-Large-960x720.jpeg"
+        }
+      ],
+      "heroes": []
+    },
+    "misgana_gebremichael": {
+      "display_name": "Misgana Gebremichael",
+      "source_images": [
+        {
+          "path": "misgana_gebremichael/source/misgana_gebremichael_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/PAA-07063-Large-960x720.jpeg"
+        }
+      ],
+      "heroes": []
+    },
+    "ruben_reuhl": {
+      "display_name": "Ruben Reuhl",
+      "source_images": [
+        {
+          "path": "ruben_reuhl/source/ruben_reuhl_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/DSC02415-Large-960x720.jpeg"
+        }
+      ],
+      "heroes": []
+    },
+    "manfred_richter": {
+      "display_name": "Manfred Richter",
+      "source_images": [
+        {
+          "path": "manfred_richter/source/manfred_richter_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/LOU_0425-Large-960x720.jpeg"
+        }
+      ],
+      "heroes": []
+    },
+    "jens_schulz": {
+      "display_name": "Jens Schulz",
+      "source_images": [
+        {
+          "path": "jens_schulz/source/jens_schulz_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/LOU_2650-Large-960x720.jpeg"
+        }
+      ],
+      "heroes": []
+    },
+    "josua_adrian": {
+      "display_name": "Josua Adrian",
+      "source_images": [
+        {
+          "path": "josua_adrian/source/josua_adrian_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/DSC1964-Large-960x720.jpeg"
+        }
+      ],
+      "heroes": []
+    },
+    "marcus_heuser": {
+      "display_name": "Marcus Heuser",
+      "source_images": [
+        {
+          "path": "marcus_heuser/source/marcus_heuser_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/PAA-07087-Large-960x720.jpeg"
+        }
+      ],
+      "heroes": []
+    },
+    "viktor_dreier": {
+      "display_name": "Viktor Dreier",
+      "source_images": [
+        {
+          "path": "viktor_dreier/source/viktor_dreier_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/DSC2069-Large-960x720.jpeg"
+        }
+      ],
+      "heroes": []
+    },
+    "abel_szentes": {
+      "display_name": "Abel Szentes",
+      "source_images": [
+        {
+          "path": "abel_szentes/source/abel_szentes_team_movechurch.jpeg",
+          "role": "official_identity",
+          "source_url": "https://movechurch.de/wp-content/uploads/DSC1162-Large-960x768.jpeg"
+        }
+      ],
+      "heroes": []
+    }
+  }
+}

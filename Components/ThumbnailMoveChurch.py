@@ -465,7 +465,6 @@ _FONT_CANDIDATES_BOLD_CONDENSED = [
     "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "C:/Windows/Fonts/impact.ttf",
 ]
 
 
@@ -559,8 +558,6 @@ def _resolve_mc_font_path(template: str | None = None) -> str | None:
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
         "/usr/share/fonts/truetype/ubuntu/Ubuntu-Bold.ttf",
-        "C:/Windows/Fonts/arialbd.ttf",
-        "C:/Windows/Fonts/calibrib.ttf",
     ):
         if os.path.isfile(path):
             return path

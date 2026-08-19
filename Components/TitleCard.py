@@ -15,6 +15,7 @@ Two modes:
 """
 
 import math
+import hashlib
 import os
 import random
 import subprocess
@@ -36,14 +37,17 @@ ACCENT_COLOUR_HEX = "#860BF8"
 _FONT_CANDIDATES = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
     "/usr/share/fonts/truetype/ubuntu/Ubuntu-Bold.ttf",
-    "C:/Windows/Fonts/arialbd.ttf",
-    "C:/Windows/Fonts/calibrib.ttf",
 ]
 
 # Thumbnail text sizing
 _THUMB_FONT_RATIO = 0.115  # slightly larger for stronger hooks on thumbnails
-_THUMB_MAX_TEXT_W_RATIO = 0.82  # slightly tighter max width to avoid overflow on curves
+_THUMB_MAX_TEXT_W_RATIO = 0.92  # use most of the frame width before shrinking
+_THUMB_MIN_SHRINK_RATIO = 0.65  # never shrink below 65% of the natural size for
+# one long word (German compounds like "GERECHTIGKEIT" would otherwise drag
+# the whole title down to a barely-readable size) — a long word may touch the
+# margin slightly instead; legibility of the title beats strict containment.
 
 # Cinematic defaults (kept from previous version)
 _CINE_BLUR_RADIUS = 25
@@ -223,6 +227,7 @@ def _thumb_font_setup(w, h, hook_text, font_ratio=_THUMB_FONT_RATIO,
     """
     font_path = _find_font()
     font_size = max(36, int(h * font_ratio))
+    min_font_size = max(36, int(font_size * _THUMB_MIN_SHRINK_RATIO))
     font = (ImageFont.truetype(font_path, font_size)
             if font_path else ImageFont.load_default())
 
@@ -232,7 +237,7 @@ def _thumb_font_setup(w, h, hook_text, font_ratio=_THUMB_FONT_RATIO,
     hook_upper = hook_text.upper()
 
     words = hook_upper.split()
-    while font_size > 36 and words:
+    while font_size > min_font_size and words:
         longest = max(words, key=len)
         bbox = draw.textbbox((0, 0), longest, font=font)
         if bbox[2] - bbox[0] <= max_text_w:
@@ -1059,6 +1064,35 @@ def generate_thumbnail_card(
         )
 
     resolved_mode = str(mode or "legacy").lower()
+
+    # Prefer the approved, text-free speaker hero over the real extracted
+    # frame whenever one exists — this is the hero-architecture path and now
+    # applies to v2/v2_test/legacy (whichever mode is actually live), since
+    # v2 is what ships in production. "epic" already does its own hero-vs-
+    # real-frame decision inside compose(), so it is excluded here to avoid
+    # matting a person out of an already-synthetic hero plate. Falls back to
+    # the real frame automatically when no hero is approved for this speaker.
+    speaker_name = str((brief or {}).get("speaker_name") or "").strip() if isinstance(brief, dict) else ""
+    if speaker_name and resolved_mode != "epic":
+        from Components.ThumbnailEpic import _cover_resize, load_speaker_hero
+
+        hero_seed = int.from_bytes(hashlib.sha256(hook_text.encode("utf-8")).digest()[:2], "big")
+        hero_image, hero_info = load_speaker_hero(speaker_name, seed=hero_seed)
+        if hero_image is not None:
+            hero_resized = _cover_resize(hero_image.convert("RGB"), (w_frame, h_frame))
+            frame = cv2.cvtColor(np.asarray(hero_resized), cv2.COLOR_RGB2BGR)
+            print(f"  [hero] using approved repertoire plate for {speaker_name} ({hero_info.get('path', hero_info)})")
+
+    epic_image = None
+    if resolved_mode == "epic":
+        epic_image = _render_epic_thumbnail(frame, hook_text=hook_text, brief=brief)
+        # The hook-card *video* is unchanged; only the still is new. Render the
+        # video through the legacy path, then write the epic still over its
+        # thumbnail at the end. A rejected epic render leaves the legacy still
+        # in place, so the watchfolder always has something to post.
+        resolved_mode = "legacy"
+        if epic_image is None:
+            print("  [epic] gate rejected the render — keeping the legacy thumbnail")
     if resolved_mode == "v2":
         from Components.ThumbnailV2 import render_thumbnail_v2_assets
 
@@ -1260,307 +1294,69 @@ def generate_thumbnail_card(
     except OSError:
         pass
 
+    if epic_image is not None:
+        epic_image.convert("RGB").save(thumbnail_image_path, "JPEG", quality=94)
+        resolved_style = "epic"
+
     return output_path, thumbnail_image_path, resolved_style
 
 
-# ══════════════════════════════════════════════════════════════════
-#  CINEMATIC MODE  — animated intro card (previous default)
-# ══════════════════════════════════════════════════════════════════
-
-def _render_background(frame_bgr):
-    """Blurred frame + dark overlay + radial vignette → RGBA Pillow image."""
-    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    img = Image.fromarray(frame_rgb)
-    img = img.filter(ImageFilter.GaussianBlur(radius=_CINE_BLUR_RADIUS))
-
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, _CINE_OVERLAY_OPACITY))
-    img = img.convert("RGBA")
-    img = Image.alpha_composite(img, overlay)
-
-    w, h = img.size
-    vig = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    vig_draw = ImageDraw.Draw(vig)
-    cx, cy = w // 2, h // 2
-    max_r = math.hypot(cx, cy)
-    steps = 30
-    for i in range(steps, 0, -1):
-        frac = i / steps
-        alpha = int(100 * frac * frac)
-        r = int(max_r * frac)
-        vig_draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(0, 0, 0, alpha))
-    img = Image.alpha_composite(img, vig)
-    return img
+# NOTE: the legacy animated title-card assembly (generate_title_card,
+# prepend_title_card, assemble_with_title_card, and their private render
+# helpers) was archived on 2026-08-16 in favour of the hero-architecture
+# static intro (see cli/branding.prepend_static_intro). A full snapshot of
+# this file from before the split lives at
+# .archive/TitleCard_pre_hero_v5_2026-08-16.py for restore if ever needed.
 
 
-def _render_text_overlay(width, height, title, subtitle=None):
-    """Cinematic mode: title text + accent line on transparent RGBA canvas."""
-    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
 
-    title_size = max(28, int(height * _CINE_FONT_RATIO))
-    sub_size = max(18, int(height * 0.032))
+def _render_epic_thumbnail(frame_bgr, *, hook_text, brief=None):
+    """Render the reference-look still. Returns None if it fails or is rejected.
 
-    font_path = _find_font()
-    if font_path:
-        title_font = ImageFont.truetype(font_path, title_size)
-        sub_font = ImageFont.truetype(font_path, sub_size)
-    else:
-        title_font = ImageFont.load_default()
-        sub_font = ImageFont.load_default()
-
-    max_text_w = int(width * 0.80)
-
-    title_lines = _wrap_text(title, title_font, max_text_w, draw)
-    line_height = int(title_size * 1.40)
-    total_title_h = line_height * len(title_lines)
-
-    accent_gap = int(height * 0.018)
-    accent_h = _CINE_ACCENT_LINE_THICKNESS
-
-    sub_lines: list[str] = []
-    sub_line_height = int(sub_size * 1.35)
-    total_sub_h = 0
-    if subtitle:
-        sub_lines = _wrap_text(subtitle, sub_font, max_text_w, draw)
-        total_sub_h = sub_line_height * len(sub_lines)
-
-    sub_gap = int(height * 0.025) if sub_lines else 0
-    total_h = total_title_h + accent_gap + accent_h + sub_gap + total_sub_h
-    y = (height - total_h) // 2
-
-    for line in title_lines:
-        bbox = draw.textbbox((0, 0), line, font=title_font)
-        lw = bbox[2] - bbox[0]
-        x = (width - lw) // 2
-        for dx, dy, a in [(-2, -2, 40), (2, -2, 40), (-2, 2, 40), (2, 2, 40),
-                          (0, 3, 60), (0, -3, 60), (3, 0, 60), (-3, 0, 60)]:
-            draw.text((x + dx, y + dy), line, font=title_font, fill=(255, 255, 255, a))
-        draw.text((x + 2, y + 3), line, font=title_font, fill=(0, 0, 0, 180))
-        draw.text((x, y), line, font=title_font, fill=(255, 255, 255, 255))
-        y += line_height
-
-    y += accent_gap
-    accent_w = int(width * _CINE_ACCENT_LINE_W_RATIO)
-    ax = (width - accent_w) // 2
-    draw.rectangle([ax, y, ax + accent_w, y + accent_h], fill=(255, 255, 255, 180))
-    y += accent_h + sub_gap
-
-    for line in sub_lines:
-        bbox = draw.textbbox((0, 0), line, font=sub_font)
-        lw = bbox[2] - bbox[0]
-        x = (width - lw) // 2
-        draw.text((x + 1, y + 1), line, font=sub_font, fill=(0, 0, 0, 140))
-        draw.text((x, y), line, font=sub_font, fill=(220, 220, 220, 255))
-        y += sub_line_height
-
-    return img
-
-
-def _render_title_image(frame_bgr, title, subtitle=None):
-    """Return a Pillow RGBA image compositing cinematic background + text.
-
-    Kept for backward compatibility and tests.
+    Never raises: the Sunday pipeline must keep producing clips even when
+    ComfyUI, the LLM, or the gate says no.
     """
-    bg = _render_background(frame_bgr)
-    w, h = bg.size
-    txt = _render_text_overlay(w, h, title, subtitle)
-    return Image.alpha_composite(bg, txt)
-
-
-def generate_title_card(
-    video_path,
-    title,
-    subtitle=None,
-    duration=CINEMATIC_DURATION,
-    output_path=None,
-):
-    """Create an animated cinematic title-card video.
-
-    Layers:
-      1. Background (blurred frame) with slow Ken Burns zoom + vignette
-      2. Text overlay fades in with upward drift, then fades to black.
-    """
-    frame = _extract_first_frame(video_path)
-    fps = _get_video_fps(video_path)
-    h_frame, w_frame = frame.shape[:2]
-    total_frames = int(fps * duration)
-
-    bg = _render_background(frame)
-    txt = _render_text_overlay(w_frame, h_frame, title, subtitle)
-
-    tmp_dir = tempfile.mkdtemp(prefix="titlecard_")
-    bg_path = os.path.join(tmp_dir, "bg.png")
-    txt_path = os.path.join(tmp_dir, "txt.png")
-    bg.convert("RGB").save(bg_path)
-    txt.save(txt_path)
-
-    if output_path is None:
-        output_path = os.path.join(os.path.dirname(video_path), "_titlecard.mp4")
-
-    fade_out_start = duration - _CINE_FADE_OUT_OFFSET
-    fade_in_end = _CINE_FADE_IN_START + _CINE_FADE_IN_DUR
-
-    zoompan_expr = (
-        f"zoompan="
-        f"z='1+{_CINE_ZOOM_FACTOR}*on/{total_frames}':"
-        f"x='iw/2-(iw/zoom/2)':"
-        f"y='ih/2-(ih/zoom/2)':"
-        f"d={total_frames}:s={w_frame}x{h_frame}:fps={fps}"
-    )
-
-    txt_fade = (
-        f"format=rgba,"
-        f"fade=t=in:st={_CINE_FADE_IN_START}:d={_CINE_FADE_IN_DUR}:alpha=1"
-    )
-    txt_y = (
-        f"if(lt(t,{_CINE_FADE_IN_START}),{_CINE_TEXT_DRIFT_PX},"
-        f"if(lt(t,{fade_in_end}),"
-        f"floor({_CINE_TEXT_DRIFT_PX}*(1-(t-{_CINE_FADE_IN_START})/{_CINE_FADE_IN_DUR})"
-        f"*(1-(t-{_CINE_FADE_IN_START})/{_CINE_FADE_IN_DUR})),0))"
-    )
-
-    filter_complex = (
-        f"[0:v]{zoompan_expr}[bg];"
-        f"[1:v]{txt_fade}[txt];"
-        f"[bg][txt]overlay=x=0:y='{txt_y}':format=auto:shortest=1[comp];"
-        f"[comp]fade=t=out:st={fade_out_start}:d={_CINE_FADE_OUT_OFFSET}[v]"
-    )
-
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-loop", "1", "-i", bg_path,
-        "-loop", "1", "-i", txt_path,
-        "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
-        "-filter_complex", filter_complex,
-        "-map", "[v]", "-map", "2:a",
-        "-t", str(duration),
-        *NVENC_FLAGS,
-        "-c:a", "aac", "-b:a", "128k",
-        output_path,
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"FFmpeg title-card generation failed:\n{result.stderr}")
-
-    for p in (bg_path, txt_path):
-        try:
-            os.remove(p)
-        except OSError:
-            pass
     try:
-        os.rmdir(tmp_dir)
-    except OSError:
-        pass
+        from Components.ThumbnailEffects import estimate_face_box
+        from Components.ThumbnailEpic import DEFAULT_MOOD, compose
+        from Components.ThumbnailMatting import extract_subject
 
-    return output_path
+        accent_line = None
+        mood = DEFAULT_MOOD
+        if isinstance(brief, dict):
+            angles = brief.get("angles") or []
+            if angles:
+                accent_line = angles[0].get("accent_line")
 
-
-# ══════════════════════════════════════════════════════════════════
-#  CONCAT / ASSEMBLY helpers
-# ══════════════════════════════════════════════════════════════════
-
-def prepend_title_card(title_card_path, main_video_path, output_path):
-    """Concatenate *title_card_path* + *main_video_path* into *output_path*.
-
-    Uses the FFmpeg concat demuxer for frame-accurate lossless join.
-    Both inputs must share the same codec / resolution / fps.
-    """
-    tmp_dir = tempfile.mkdtemp(prefix="concat_")
-    list_path = os.path.join(tmp_dir, "concat.txt")
-    with open(list_path, "w") as f:
-        f.write(f"file '{os.path.abspath(title_card_path)}'\n")
-        f.write(f"file '{os.path.abspath(main_video_path)}'\n")
-
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-f", "concat", "-safe", "0",
-        "-i", list_path,
-        "-c", "copy",
-        "-movflags", "+faststart",
-        output_path,
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"FFmpeg concat failed:\n{result.stderr}"
+        matte = extract_subject(frame_bgr, isolate_primary=True)
+        face_box = estimate_face_box(matte.subject_rgba)
+        speaker_name = str((brief or {}).get("speaker_name") or "").strip() if isinstance(brief, dict) else ""
+        story_asset_ids = list((brief or {}).get("story_asset_ids") or []) if isinstance(brief, dict) else []
+        # Narrative plates need the exact real speaker as an independent layer.
+        # Full AI heroes already contain their own background and cannot be
+        # restacked without destroying the intended depth and light direction.
+        speaker_render = "real_procedural" if story_asset_ids else ("ai_repertoire" if speaker_name else "real_procedural")
+        # Stable per-hook selection lets one speaker use multiple approved heroes.
+        hero_seed = int.from_bytes(hashlib.sha256(hook_text.encode("utf-8")).digest()[:2], "big")
+        result = compose(
+            hook_text,
+            subject_rgba=matte.subject_rgba,
+            subject_face_box=face_box,
+            frame_bgr=frame_bgr,
+            mood=mood,
+            speaker_render=speaker_render,
+            speaker_name=speaker_name,
+            seed=hero_seed,
+            hero_variant=(brief or {}).get("hero_variant") if isinstance(brief, dict) else None,
+            accent_line=accent_line,
+            gate_tier="normal",
+            story_asset_ids=story_asset_ids,
+            light_direction=str((brief or {}).get("light_direction") or "upper_left"),
         )
-
-    # Cleanup
-    try:
-        os.remove(list_path)
-        os.rmdir(tmp_dir)
-    except OSError:
-        pass
-
-    return output_path
-
-
-def assemble_with_title_card(
-    title_card_path,
-    subtitled_video_path,
-    audio_source_path,
-    output_path,
-    title_duration=CINEMATIC_DURATION,
-    speech_gain_db=0.0,
-    bg_music_path=None,
-    music_gain_db=None,
-):
-    """Assemble final short: title card video + subtitled video + delayed audio.
-
-    1. Concatenates the title-card and subtitled video streams.
-    2. Takes the audio from *audio_source_path*, boosts by *speech_gain_db*,
-       and delays it by *title_duration* so speech starts after the title card.
-    3. Optionally mixes in background music at -15 dB with a 5 s fade-out.
-    """
-    delay_ms = int(title_duration * 1000)
-
-    # Total duration = title card + subtitled video
-    title_dur = _get_media_duration(title_card_path)
-    sub_dur = _get_media_duration(subtitled_video_path)
-    total_dur = title_dur + sub_dur
-
-    # Build speech filter chain
-    speech_filter = f"[2:a]adelay={delay_ms}|{delay_ms}"
-    if speech_gain_db:
-        speech_filter += f",volume={speech_gain_db:.1f}dB"
-    speech_filter += "[speech]"
-
-    inputs = [
-        "-i", os.path.abspath(title_card_path),
-        "-i", os.path.abspath(subtitled_video_path),
-        "-i", os.path.abspath(audio_source_path),
-    ]
-
-    if bg_music_path and os.path.isfile(bg_music_path):
-        inputs += ["-i", os.path.abspath(bg_music_path)]
-        _music_db = music_gain_db if music_gain_db is not None else _BG_MUSIC_VOLUME_DB
-        music_filter = _bg_music_filter(3, total_dur, volume_db=_music_db)
-        filter_complex = (
-            f"[0:v][1:v]concat=n=2:v=1:a=0[v];"
-            f"{speech_filter};"
-            f"{music_filter};"
-            f"[speech][music]amix=inputs=2:duration=first:normalize=0[a]"
-        )
-    else:
-        filter_complex = (
-            f"[0:v][1:v]concat=n=2:v=1:a=0[v];"
-            f"{speech_filter.replace('[speech]', '[a]')}"
-        )
-
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
-        *inputs,
-        "-filter_complex", filter_complex,
-        "-map", "[v]",
-        "-map", "[a]",
-        *NVENC_FLAGS,
-        "-c:a", "aac", "-b:a", "192k",
-        os.path.abspath(output_path),
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"FFmpeg title-card assembly failed:\n{result.stderr}"
-        )
-
-    return output_path
+        if result.gate is not None and not result.gate.passed:
+            print(f"  [epic] hard gate failed: {result.gate.hard_failures}")
+            return None
+        return result.image
+    except Exception as exc:  # noqa: BLE001 - never break the render pipeline
+        print(f"  [epic] render failed ({type(exc).__name__}: {exc})")
+        return None

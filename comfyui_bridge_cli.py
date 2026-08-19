@@ -4,6 +4,7 @@
 Subcommands:
   status      Ping the running ComfyUI server and report version.
   background  Text->image sermon background (auto-wired into thumbnails).
+  music       Text->music instrumental generation with ACE-Step 1.5.
   edit        img2img restyle/edit of an existing frame.
   run         Run any API-format workflow JSON, with optional node overrides.
   list        Scan a folder and report which workflows are API vs UI format.
@@ -26,6 +27,7 @@ from Components.ComfyUIBackground import (
     generate_edited_image,
     run_api_workflow,
 )
+from Components.ComfyUIMusic import generate_music
 
 
 def _emit(payload: dict) -> None:
@@ -93,6 +95,26 @@ def _cmd_edit(args) -> int:
     return 0
 
 
+def _cmd_music(args) -> int:
+    output, info = generate_music(
+        tags=args.prompt,
+        output_path=args.out,
+        duration_sec=args.duration,
+        bpm=args.bpm,
+        seed=args.seed,
+        keyscale=args.key,
+        language=args.language,
+        lyrics=args.lyrics,
+        generate_audio_codes=args.audio_codes,
+        prepare_loop=not args.no_loop_prep,
+        crossfade_sec=args.crossfade,
+        base_url=args.base_url,
+        timeout_sec=args.timeout,
+    )
+    _emit({"out": str(output), **info})
+    return 0
+
+
 def _cmd_run(args) -> int:
     workflow_path = Path(args.workflow).expanduser()
     fmt = detect_workflow_format(workflow_path)
@@ -150,6 +172,25 @@ def build_parser() -> argparse.ArgumentParser:
     p_edit.add_argument("--cfg", type=float, default=1.0)
     p_edit.add_argument("--out", required=True)
     p_edit.set_defaults(func=_cmd_edit)
+
+    p_music = sub.add_parser("music", help="Generate instrumental music with ACE-Step 1.5")
+    p_music.add_argument("--prompt", required=True, help="Genre, instruments, mood and mix description")
+    p_music.add_argument("--duration", type=float, default=45.0)
+    p_music.add_argument("--bpm", type=int, default=78)
+    p_music.add_argument("--key", default="D major")
+    p_music.add_argument("--language", default="en")
+    p_music.add_argument("--lyrics", default="[Instrumental]")
+    p_music.add_argument(
+        "--audio-codes",
+        action="store_true",
+        help="Enable LM-planned audio codes (better for structured songs than continuous beds)",
+    )
+    p_music.add_argument("--no-loop-prep", action="store_true", help="Keep the raw generated ending")
+    p_music.add_argument("--crossfade", type=float, default=1.5, help="Loop crossfade in seconds")
+    p_music.add_argument("--seed", type=int, default=None)
+    p_music.add_argument("--timeout", type=int, default=600)
+    p_music.add_argument("--out", required=True, help="Output .flac or .mp3 path")
+    p_music.set_defaults(func=_cmd_music)
 
     p_run = sub.add_parser("run", help="Run an API-format workflow JSON")
     p_run.add_argument("--workflow", required=True)

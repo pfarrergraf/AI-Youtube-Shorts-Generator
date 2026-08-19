@@ -338,7 +338,6 @@ def update_thumbnail_module() -> None:
         + '    "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",\n'
         + '    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",\n'
         + '    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",\n'
-        + '    "C:/Windows/Fonts/impact.ttf",\n'
         + "]"
     )
 

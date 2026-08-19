@@ -1,0 +1,13 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Misgana Gebremichael in the pose archetype empathic_open.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, glasses if present, hair, skin tone and body proportions.
+Expression: soft attentive eyes, compassionate half-smile.
+Gesture: one open palm toward the viewer, shoulders relaxed.
+Composition/framing: chest-up; rule of thirds; keep one clean side for later typography.
+Lighting/mood: soft warm key from the text side, subtle cyan rim.
+Color palette: amber, deep navy, ivory.
+Story compatibility: comfort, grace, belonging, healing.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, believable handheld microphone when natural.
+Constraints: exactly one speaker; text-free; background remains simple enough for later layer compositing; light direction must be visually explicit and physically coherent.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume.

@@ -1,0 +1,141 @@
+{
+  "source": "thumbnail_ideal_examples",
+  "n_references": 10,
+  "margin": 0.1,
+  "bands": {
+    "cap_height_ratio": {
+      "low": 0.07183014354066986,
+      "high": 0.1715909090909091,
+      "observed_min": 0.08014354066985646,
+      "observed_max": 0.1632775119617225,
+      "n": 10
+    },
+    "type_ink_ratio": {
+      "low": 0.021891350441604923,
+      "high": 0.1758749472463886,
+      "observed_min": 0.03472331684200357,
+      "observed_max": 0.16304298084598998,
+      "n": 10
+    },
+    "peak_luma": {
+      "low": 197.53333892822266,
+      "high": 259.13333282470705,
+      "observed_min": 202.6666717529297,
+      "observed_max": 254.0,
+      "n": 10
+    },
+    "hot_fraction": {
+      "low": 0.023384849671275083,
+      "high": 0.18833001133884852,
+      "observed_min": 0.03713027981023954,
+      "observed_max": 0.17458458119988407,
+      "n": 10
+    },
+    "dark_fraction": {
+      "low": 0.3402790983835785,
+      "high": 0.6731241324255476,
+      "observed_min": 0.3680161845537426,
+      "observed_max": 0.6453870462553835,
+      "n": 10
+    },
+    "mean_saturation": {
+      "low": 0.32622706294059756,
+      "high": 0.6767310559749603,
+      "observed_min": 0.35543572902679443,
+      "observed_max": 0.6475223898887634,
+      "n": 10
+    }
+  },
+  "per_image": {
+    "1": {
+      "peak_luma": 254.0,
+      "hot_fraction": 0.17458,
+      "dark_fraction": 0.50184,
+      "mean_saturation": 0.57154,
+      "type_ink_ratio": 0.16304,
+      "type_block_ratio": 0.45993,
+      "cap_height_ratio": 0.15331
+    },
+    "2": {
+      "peak_luma": 249.33333,
+      "hot_fraction": 0.1299,
+      "dark_fraction": 0.46392,
+      "mean_saturation": 0.51793,
+      "type_ink_ratio": 0.06036,
+      "type_block_ratio": 0.43002,
+      "cap_height_ratio": 0.14334
+    },
+    "3": {
+      "peak_luma": 250.66667,
+      "hot_fraction": 0.09838,
+      "dark_fraction": 0.57422,
+      "mean_saturation": 0.53342,
+      "type_ink_ratio": 0.0952,
+      "type_block_ratio": 0.27033,
+      "cap_height_ratio": 0.13517
+    },
+    "4": {
+      "peak_luma": 253.66667,
+      "hot_fraction": 0.1089,
+      "dark_fraction": 0.36802,
+      "mean_saturation": 0.50989,
+      "type_ink_ratio": 0.15645,
+      "type_block_ratio": 0.26017,
+      "cap_height_ratio": 0.13008
+    },
+    "5": {
+      "peak_luma": 240.0,
+      "hot_fraction": 0.09935,
+      "dark_fraction": 0.55791,
+      "mean_saturation": 0.64752,
+      "type_ink_ratio": 0.11531,
+      "type_block_ratio": 0.48983,
+      "cap_height_ratio": 0.16328
+    },
+    "6": {
+      "peak_luma": 254.0,
+      "hot_fraction": 0.11655,
+      "dark_fraction": 0.44559,
+      "mean_saturation": 0.35544,
+      "type_ink_ratio": 0.09503,
+      "type_block_ratio": 0.44019,
+      "cap_height_ratio": 0.14673
+    },
+    "7": {
+      "peak_luma": 253.66667,
+      "hot_fraction": 0.13103,
+      "dark_fraction": 0.47878,
+      "mean_saturation": 0.43136,
+      "type_ink_ratio": 0.06963,
+      "type_block_ratio": 0.34031,
+      "cap_height_ratio": 0.08508
+    },
+    "8": {
+      "peak_luma": 247.33333,
+      "hot_fraction": 0.16706,
+      "dark_fraction": 0.45913,
+      "mean_saturation": 0.58392,
+      "type_ink_ratio": 0.15291,
+      "type_block_ratio": 0.30981,
+      "cap_height_ratio": 0.1549
+    },
+    "9": {
+      "peak_luma": 202.66667,
+      "hot_fraction": 0.03713,
+      "dark_fraction": 0.64539,
+      "mean_saturation": 0.62165,
+      "type_ink_ratio": 0.03472,
+      "type_block_ratio": 0.08014,
+      "cap_height_ratio": 0.08014
+    },
+    "10": {
+      "peak_luma": 234.0,
+      "hot_fraction": 0.06329,
+      "dark_fraction": 0.43192,
+      "mean_saturation": 0.52282,
+      "type_ink_ratio": 0.06466,
+      "type_block_ratio": 0.31998,
+      "cap_height_ratio": 0.15999
+    }
+  }
+}

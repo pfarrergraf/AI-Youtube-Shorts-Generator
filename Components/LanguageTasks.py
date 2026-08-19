@@ -268,7 +268,9 @@ CRITICAL RULES:
 - **Never start mid-story**: If the joke is about "my father at the airport", start where the speaker first mentions the airport, NOT halfway through.
 - **Never cut during reactions**: Your end MUST be >= the END timestamp of the last [AUDIENCE REACTION].
 - **Stop before new content**: Do NOT include the beginning of the NEXT topic.
-- **Duration**: 30-180 seconds. Too long is better than too short.
+- **Duration target**: 15-90 seconds. This is a target, not a hard ceiling — a
+  complete, finished thought always outranks hitting the target. Too long is
+  better than too short.
 - **Complete sentences only**: Never start or end mid-sentence.
 
 Return ONLY a JSON object (no markdown fences):
@@ -357,7 +359,25 @@ CRITICAL RULES:
 - **The payoff is NON-NEGOTIABLE.** A 90-second clip that includes the punchline beats a 45-second clip that cuts before it. If the punchline is at second 88 of a story that starts at second 0, the clip is 88+ seconds. So be it.
 - **Find ALL highlights.** A 5-minute video may have 1-2. A 60-minute sermon has 10-25.
 - **No overlaps.** Clips must not overlap in time.
-- **Duration**: 30-180 seconds. Shorter is fine if the payoff is strong and the story is complete.
+- **Duration target**: 15-90 seconds. This is a target, not a hard ceiling.
+  Shorter is fine if the payoff is strong and the story is already complete at
+  that point. Longer is fine — even well past 90s — if that's what a finished
+  thought actually needs. Never cut a clip short just to hit the target; a
+  complete 110-second clip beats an incomplete 80-second one every time.
+- **Start at a paragraph/topic boundary, never mid-explanation.** The first
+  sentence of a clip must be where the speaker actually opens that thought —
+  a new topic, a new premise, a new illustration — not a sentence pulled out
+  of the middle of an argument that only makes sense because of something
+  said earlier. If you can't summarise the clip's opening line without
+  reaching further back in the transcript, your start is too late.
+- **End only when the thought is fully resolved, never at the first available
+  period.** A clip must end on a sentence that completes the point being
+  made — the argument has landed, the story has paid off, the question has
+  been answered. Ending on a grammatically-complete sentence is not enough if
+  the very next sentence is clearly still part of the same thought (e.g. it
+  continues a list, restates the point, or delivers the conclusion the
+  previous sentence was building toward). When in doubt, extend to the next
+  sentence that actually closes the topic.
 - **Complete sentences only**: Never start or end mid-sentence.
 - **Skip boring passages.** Flat exposition, repetitive explanations, or administrative remarks are not clips.
 - **German idioms/context**: Understand that speakers may use idioms ("mit allem Drum und Dran", "Tacheles reden", "auf Herz und Nieren prüfen"). These are part of the rhetorical texture — include them in context.
@@ -918,7 +938,14 @@ def GetAllHighlights(Transcription, reference_text=None, speaker_profile_text=No
                 normalised = normalise_highlight_candidate(item)
                 if not normalised:
                     continue
-                if normalised["duration"] < 20:
+                # 15-90s is the LLM's target, not a hard ceiling (see prompt);
+                # only reject genuinely broken candidates here. The upper
+                # bound is set well above _expand_highlights_to_segment_boundaries's
+                # own ~140s completion cap in shorts_bridge.py so a highlight
+                # that's already complete just past the target isn't thrown
+                # away outright, only to fall back to the sentence-unaware
+                # heuristic path if too many candidates get rejected this way.
+                if normalised["duration"] < 15 or normalised["duration"] > 150:
                     continue
                 all_highlights.append(normalised)
 
@@ -1271,6 +1298,46 @@ _DEFAULT_BACKGROUND_NEGATIVE = (
     "people, face, hands, phone, smartphone, camera, blurry, distorted, clutter"
 )
 
+_THUMBNAIL_POSE_IDS = {
+    "empathic_open",
+    "battle_ready",
+    "point_to_heaven",
+    "compassion_near_tears",
+    "righteous_anger",
+    "urgent_warning",
+    "joyful_breakthrough",
+    "astonished_revelation",
+    "prayerful_surrender",
+    "direct_challenge",
+    "protective_pastor",
+    "hopeful_invitation",
+}
+
+_THUMBNAIL_STORY_ASSET_IDS = {
+    "daniel_lions_den",
+    "david_goliath",
+    "heavenly_banquet",
+    "storm_boat",
+    "prodigal_road_home",
+    "empty_tomb",
+    "broken_chains",
+    "lion_foreground",
+    "mustard_seed_tree",
+    "oil_lamp_darkness",
+}
+
+_THUMBNAIL_LAYER_ORDER = [
+    "background_plate",
+    "atmosphere_back",
+    "story_midground",
+    "title_back",
+    "speaker",
+    "foreground_eye_catcher",
+    "title_front",
+    "light_wrap",
+    "final_grade",
+]
+
 
 THUMBNAIL_BRIEF_PROMPT = """\
 You are the thumbnail director for portrait smartphone sermon highlight clips.
@@ -1287,11 +1354,20 @@ Your job:
 Return EXACTLY one JSON object with these keys:
 - hook_text
 - accent_keyword
+- social_title
+- story_concept
+- curiosity_gap
 - emotion_target
+- pose_id
+- story_asset_ids
 - speaker_side
 - background_style
 - background_prompt
 - background_negative_prompt
+- layer_plan
+- light_direction
+- palette
+- art_direction
 - brand_label
 
 Hard constraints:
@@ -1299,6 +1375,14 @@ Hard constraints:
 - The same design is used both as the uploaded thumbnail image and as the first frame / opening card.
 - hook_text must be 2-5 words, max 28 characters.
 - hook_text must be truthful, concrete, and curiosity-driving without cheap clickbait.
+- social_title is the cross-platform upload title. It must begin with hook_text,
+  then add useful context or the promise of the clip; max 90 characters.
+- The image, hook_text and social_title must complement one another instead of
+  repeating the same information three times.
+- story_concept states the concrete visual story in one sentence.
+- curiosity_gap states the unanswered question that makes the viewer want the clip's payoff.
+- Never add a biblical person, miracle or danger unless it is grounded in the
+  supplied title, transcript or content summary. Do not fabricate a Bible story.
 - If the transcript is German, the hook must be German.
 - Do not describe the speaker. Write the message itself.
 - Keep typography clean and easy to read in under 1 second.
@@ -1306,6 +1390,22 @@ Hard constraints:
 - Leave the lower caption zone visually calm; prioritize the upper third.
 - background_prompt must be a positive SDXL background prompt for the image only.
 - background_negative_prompt must be a concise negative prompt that excludes text, watermark, logo, people, face, hands, and UI clutter.
+- pose_id must be one of: empathic_open, battle_ready, point_to_heaven,
+  compassion_near_tears, righteous_anger, urgent_warning, joyful_breakthrough,
+  astonished_revelation, prayerful_surrender, direct_challenge,
+  protective_pastor, hopeful_invitation.
+- story_asset_ids is an array with 0-3 grounded ids chosen from:
+  daniel_lions_den, david_goliath, heavenly_banquet, storm_boat,
+  prodigal_road_home, empty_tomb, broken_chains, lion_foreground,
+  mustard_seed_tree, oil_lamp_darkness. Use [] when none is grounded.
+- layer_plan is an ordered subset of: background_plate, atmosphere_back,
+  story_midground, title_back, speaker, foreground_eye_catcher, title_front,
+  light_wrap, final_grade. Speaker must never be behind every title line.
+- light_direction names one physically coherent key-light direction shared by
+  background, speaker rim light and foreground assets.
+- palette contains exactly three concise colour names, including one accent.
+- art_direction must be one of: modern_cinematic, renaissance_chiaroscuro,
+  baroque_drama, classical_tableau. Historic modes are occasional accents, not defaults.
 
 speaker_side must be one of: left, right, center_low, auto
 background_style must be one of: clean_gradient, strong_contrast, emotion_focus
@@ -1358,6 +1458,86 @@ def GenerateTitleHook(clip_content, clip_transcript="", video_title="", language
     )
 
 
+THUMBNAIL_ANGLES_PROMPT = """\
+You write short, punchy thumbnail hooks for sermon short-form videos.
+
+Return ONLY a JSON array of objects, no prose, no code fences. Each object:
+  {"hook": "...", "accent_line": 0, "emotion": "...", "scene": "..."}
+
+Hard rules:
+- "hook" is 2-4 words, in the requested language, ALL-CAPS-friendly, max 22 characters.
+- Ground every hook in the supplied transcript. Never invent claims, quotes or
+  teachings that are not in the source material.
+- The hooks must be meaningfully DIFFERENT from one another. Vary the angle
+  across tension, promise, curiosity, urgency, transformation, challenge,
+  comfort, revelation and breakthrough. No near-duplicates.
+- "accent_line" is the 0-based index of the line to highlight in colour, or null.
+  A hook renders as 1-3 stacked lines, so use 0, 1 or 2.
+- "emotion" is one word. "scene" is a short visual idea, max 12 words, no text in it.
+"""
+
+
+def GenerateThumbnailAngles(
+    clip_content,
+    clip_transcript="",
+    video_title="",
+    language="de",
+    speaker_name="",
+    n_angles=10,
+):
+    """N distinct thumbnail hook angles, grounded in the transcript.
+
+    Mirrors the sermon-agent brief: many different angles on one sermon rather
+    than one hook. Returns [] on any failure so callers can fall back to the
+    single-hook path — the Sunday pipeline must never block on the LLM.
+    """
+    parts = [f"Video title: {video_title}"]
+    if clip_transcript:
+        t = clip_transcript[:2000]
+        if len(clip_transcript) > 2000:
+            t = t.rsplit(" ", 1)[0] + " ..."
+        parts.append(f"Transcript:\n{t}")
+    parts.append(f"Content summary: {clip_content}")
+    parts.append(f"Language: {language}")
+    if speaker_name:
+        parts.append(f"Speaker name: {speaker_name}")
+    parts.append(f"Produce exactly {n_angles} distinct angles.")
+
+    try:
+        raw = _call_llm(THUMBNAIL_ANGLES_PROMPT, "\n\n".join(parts), temperature=0.8)
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`").replace("json", "", 1).strip()
+        payload = _json.loads(cleaned)
+        if not isinstance(payload, list):
+            return []
+    except Exception as exc:
+        print(f"[ThumbnailAngles] LLM call failed ({exc}); no angles.")
+        return []
+
+    angles = []
+    seen = set()
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        hook = " ".join(str(item.get("hook") or "").split())[:22]
+        if not hook or len(hook.split()) > 4:
+            continue
+        key = hook.upper()
+        if key in seen:  # the prompt asks for variety; enforce it too
+            continue
+        seen.add(key)
+        accent = item.get("accent_line")
+        accent = int(accent) if isinstance(accent, (int, float)) and 0 <= int(accent) <= 2 else None
+        angles.append({
+            "hook": hook,
+            "accent_line": accent,
+            "emotion": " ".join(str(item.get("emotion") or "").split())[:24],
+            "scene": " ".join(str(item.get("scene") or "").split())[:80],
+        })
+    return angles[:n_angles]
+
+
 def GenerateThumbnailBrief(
     clip_content,
     clip_transcript="",
@@ -1365,8 +1545,14 @@ def GenerateThumbnailBrief(
     language="de",
     speaker_name="",
     brand_label="",
+    n_angles=1,
 ):
-    """Ask the LLM for a compact portrait-thumbnail brief."""
+    """Ask the LLM for a compact portrait-thumbnail brief.
+
+    With `n_angles > 1` the result also carries an ``angles`` list of distinct
+    hook variants (see :func:`GenerateThumbnailAngles`). The single-hook keys are
+    unchanged, so the existing v2/v2_test callers are unaffected.
+    """
     parts = [f"Video title: {video_title}"]
     if clip_transcript:
         t = clip_transcript[:800]
@@ -1390,7 +1576,14 @@ def GenerateThumbnailBrief(
     fallback = {
         "hook_text": hook_fallback,
         "accent_keyword": accent_fallback,
+        "social_title": " – ".join(
+            value for value in (hook_fallback, " ".join(str(video_title or "").split())) if value
+        )[:90],
+        "story_concept": " ".join(str(clip_content or "").split())[:180],
+        "curiosity_gap": "",
         "emotion_target": "conviction",
+        "pose_id": "direct_challenge",
+        "story_asset_ids": [],
         "speaker_side": "auto",
         "background_style": "clean_gradient",
         "background_prompt": _fallback_thumbnail_background_prompt(
@@ -1401,7 +1594,13 @@ def GenerateThumbnailBrief(
             background_style="clean_gradient",
         ),
         "background_negative_prompt": _DEFAULT_BACKGROUND_NEGATIVE,
+        "layer_plan": list(_THUMBNAIL_LAYER_ORDER),
+        "light_direction": "upper_left",
+        "palette": ["deep navy", "warm gold", "ivory"],
+        "art_direction": "modern_cinematic",
         "brand_label": brand_label or "",
+        "speaker_name": speaker_name or "",
+        "angles": [],
     }
 
     try:
@@ -1439,20 +1638,78 @@ def GenerateThumbnailBrief(
         background_negative_prompt = " ".join(str(payload.get("background_negative_prompt") or "").split())[:240]
         if not background_negative_prompt:
             background_negative_prompt = _DEFAULT_BACKGROUND_NEGATIVE
+        social_title = " ".join(str(payload.get("social_title") or "").split())[:90]
+        if not social_title:
+            social_title = fallback["social_title"]
+        if hook_text.upper() not in social_title.upper():
+            social_title = f"{hook_text} – {social_title}"[:90]
+        pose_id = str(payload.get("pose_id") or "").strip().lower()
+        if pose_id not in _THUMBNAIL_POSE_IDS:
+            pose_id = fallback["pose_id"]
+        raw_asset_ids = payload.get("story_asset_ids")
+        story_asset_ids = []
+        if isinstance(raw_asset_ids, list):
+            for item in raw_asset_ids:
+                asset_id = str(item or "").strip().lower()
+                if asset_id in _THUMBNAIL_STORY_ASSET_IDS and asset_id not in story_asset_ids:
+                    story_asset_ids.append(asset_id)
+        raw_layer_plan = payload.get("layer_plan")
+        layer_plan = []
+        if isinstance(raw_layer_plan, list):
+            for item in raw_layer_plan:
+                layer = str(item or "").strip().lower()
+                if layer in _THUMBNAIL_LAYER_ORDER and layer not in layer_plan:
+                    layer_plan.append(layer)
+        if "speaker" not in layer_plan or "final_grade" not in layer_plan:
+            layer_plan = list(_THUMBNAIL_LAYER_ORDER)
+        raw_palette = payload.get("palette")
+        palette = [" ".join(str(item or "").split())[:24] for item in raw_palette] if isinstance(raw_palette, list) else []
+        palette = [item for item in palette if item][:3]
+        if len(palette) != 3:
+            palette = list(fallback["palette"])
+        art_direction = str(payload.get("art_direction") or "").strip().lower()
+        if art_direction not in {"modern_cinematic", "renaissance_chiaroscuro", "baroque_drama", "classical_tableau"}:
+            art_direction = "modern_cinematic"
         return {
             "hook_text": hook_text,
             "accent_keyword": accent_keyword,
+            "social_title": social_title,
+            "story_concept": " ".join(str(payload.get("story_concept") or clip_content or "").split())[:180],
+            "curiosity_gap": " ".join(str(payload.get("curiosity_gap") or "").split())[:140],
             "emotion_target": " ".join(str(payload.get("emotion_target") or "conviction").split())[:40],
+            "pose_id": pose_id,
+            "story_asset_ids": story_asset_ids[:3],
             "speaker_side": speaker_side,
             "background_style": background_style,
             "background_prompt": background_prompt,
             "background_negative_prompt": background_negative_prompt,
+            "layer_plan": layer_plan,
+            "light_direction": " ".join(str(payload.get("light_direction") or "upper_left").split())[:40],
+            "palette": palette,
+            "art_direction": art_direction,
             "brand_label": " ".join(str(payload.get("brand_label") or brand_label or "").split())[:28],
+            "speaker_name": speaker_name or "",
+            "angles": _thumbnail_angles_or_empty(
+                clip_content, clip_transcript, video_title, language, speaker_name, n_angles
+            ),
         }
     except Exception as exc:
         print(f"[ThumbnailBrief] LLM call failed ({exc}); using fallback.")
         return fallback
 
 
+def _thumbnail_angles_or_empty(clip_content, clip_transcript, video_title, language, speaker_name, n_angles):
+    if not n_angles or n_angles < 2:
+        return []
+    return GenerateThumbnailAngles(
+        clip_content,
+        clip_transcript=clip_transcript,
+        video_title=video_title,
+        language=language,
+        speaker_name=speaker_name,
+        n_angles=n_angles,
+    )
+
+
 if __name__ == "__main__":
-    print(GetHighlight(User))
+    pass

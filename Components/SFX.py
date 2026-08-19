@@ -438,12 +438,12 @@ def _build_filter_complex_for_sfx(
         )
         filter_parts.append(
             f"{speech_label2}{ducked_label}amix=inputs=2:normalize=0:dropout_transition=0,"
-            f"alimiter=limit=0.95{final_label}"
+            f"alimiter=limit=0.85{final_label}"
         )
     else:
         filter_parts.append(
             f"{speech_label}{sfx_bus_label}amix=inputs=2:normalize=0:dropout_transition=0,"
-            f"alimiter=limit=0.95{final_label}"
+            f"alimiter=limit=0.85{final_label}"
         )
 
     return ";".join(filter_parts), final_label

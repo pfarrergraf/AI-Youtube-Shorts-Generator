@@ -532,9 +532,20 @@ def _get_video_duration(video_path):
 
 
 def combine_videos(video_with_audio, video_without_audio, output_filename,
-                   speech_gain_db=0.0, bg_music_path=None, music_gain_db=None):
+                   speech_gain_db=0.0, bg_music_path=None, music_gain_db=None,
+                   target_lufs=None):
+    """*target_lufs*, when set, takes over speech leveling from *speech_gain_db*.
+
+    A single fixed-gain ``volume=`` filter can't safely bring typical sermon
+    speech (high peak-to-average ratio) up to a modern streaming loudness
+    target without clipping — the peak headroom runs out long before the
+    integrated loudness does (verified: raising -20 LUFS speech to -14 LUFS by
+    flat gain alone pushed measured true peaks to +5 dBTP on real clips).
+    ``loudnorm`` solves this with adaptive gain + limiting in one pass instead
+    of a single multiplier.
+    """
     try:
-        if not speech_gain_db and not bg_music_path:
+        if not speech_gain_db and not bg_music_path and not target_lufs:
             # Fast path: stream-copy when no audio processing needed
             command = [
                 "ffmpeg",
@@ -564,7 +575,9 @@ def combine_videos(video_with_audio, video_without_audio, output_filename,
             total_dur = _get_video_duration(video_without_audio)
 
             speech_filter = "[1:a]aresample=48000"
-            if speech_gain_db:
+            if target_lufs is not None:
+                speech_filter += f",loudnorm=I={target_lufs}:TP=-1.0:LRA=11:print_format=none"
+            elif speech_gain_db:
                 speech_filter += f",volume={speech_gain_db:.1f}dB"
             speech_filter += "[speech]"
 
@@ -586,7 +599,14 @@ def combine_videos(video_with_audio, video_without_audio, output_filename,
                 filter_complex = (
                     f"{speech_filter};"
                     f"{music_filter};"
-                    f"[speech][music]amix=inputs=2:duration=first:normalize=0[a]"
+                    # NOT duration=first: combined with loudnorm on [speech],
+                    # ffmpeg's amix mis-tracks "first" input duration and
+                    # truncates the mix ~1.3-2.9s early, cutting the tail of
+                    # every clip with background music (verified via isolated
+                    # ffmpeg repro, 2026-08-19). Music is already atrim'd to
+                    # total_dur above, so "longest" gives the identical result
+                    # without the bug.
+                    f"[speech][music]amix=inputs=2:duration=longest:normalize=0[a]"
                 )
             else:
                 filter_complex = speech_filter.replace("[speech]", "[a]")

@@ -1,0 +1,13 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Marcus Heuser in the pose archetype righteous_anger.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, glasses if present, hair, skin tone and body proportions.
+Expression: intense eyes and forceful speech, not hatred.
+Gesture: strong open chopping hand, torso turning into the gesture.
+Composition/framing: chest-up; rule of thirds; keep one clean side for later typography.
+Lighting/mood: strong crimson edge light and narrow neutral face key.
+Color palette: red, black, cold white.
+Story compatibility: injustice, hypocrisy, warning, breaking chains.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, believable handheld microphone when natural.
+Constraints: exactly one speaker; text-free; background remains simple enough for later layer compositing; light direction must be visually explicit and physically coherent.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume.

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-14",
+  "speaker_key": "misgana_gebremichael",
+  "display_name": "Misgana Gebremichael",
+  "status": "prepared",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/misgana_gebremichael/source/misgana_gebremichael_team_movechurch.jpeg"
+  ],
+  "jobs": [
+    {
+      "pose_id": "empathic_open",
+      "prompt_path": "empathic_open.prompt.txt",
+      "output": "misgana_gebremichael_empathic_open_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "battle_ready",
+      "prompt_path": "battle_ready.prompt.txt",
+      "output": "misgana_gebremichael_battle_ready_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "point_to_heaven",
+      "prompt_path": "point_to_heaven.prompt.txt",
+      "output": "misgana_gebremichael_point_to_heaven_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "compassion_near_tears",
+      "prompt_path": "compassion_near_tears.prompt.txt",
+      "output": "misgana_gebremichael_compassion_near_tears_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "righteous_anger",
+      "prompt_path": "righteous_anger.prompt.txt",
+      "output": "misgana_gebremichael_righteous_anger_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "urgent_warning",
+      "prompt_path": "urgent_warning.prompt.txt",
+      "output": "misgana_gebremichael_urgent_warning_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "joyful_breakthrough",
+      "prompt_path": "joyful_breakthrough.prompt.txt",
+      "output": "misgana_gebremichael_joyful_breakthrough_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "astonished_revelation",
+      "prompt_path": "astonished_revelation.prompt.txt",
+      "output": "misgana_gebremichael_astonished_revelation_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "prayerful_surrender",
+      "prompt_path": "prayerful_surrender.prompt.txt",
+      "output": "misgana_gebremichael_prayerful_surrender_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "direct_challenge",
+      "prompt_path": "direct_challenge.prompt.txt",
+      "output": "misgana_gebremichael_direct_challenge_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "protective_pastor",
+      "prompt_path": "protective_pastor.prompt.txt",
+      "output": "misgana_gebremichael_protective_pastor_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    },
+    {
+      "pose_id": "hopeful_invitation",
+      "prompt_path": "hopeful_invitation.prompt.txt",
+      "output": "misgana_gebremichael_hopeful_invitation_candidate_v1.png",
+      "status": "prepared",
+      "approved": false
+    }
+  ]
+}

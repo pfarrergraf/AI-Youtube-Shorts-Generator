@@ -1,0 +1,619 @@
+"""
+The "epic" thumbnail composer.
+==============================
+
+Puts the reference look together: dark stage, one light source, a real speaker
+cutout, and reference-scale typography that overlaps the subject for depth.
+
+Z-order, mirroring the references::
+
+    background plate
+    haze
+    god rays / light shaft
+    back glow
+    BACK text lines        (the upper lines, behind the speaker)
+    speaker cutout + rim light
+    FRONT text lines       (the lower lines, in front — this is the depth cue)
+    bloom / vignette / grain / finish
+
+Speaker-render variants are selected with `speaker_render`; the ones that need
+ComfyUI degrade to the offline path when the server is down, so a render never
+fails just because a service is off.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import json
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
+
+from Components import ThumbnailAtmosphere as atmo
+from Components.ThumbnailReferenceGate import GateResult, load_bands, run_gate
+from Components.ThumbnailTypeEngine import TypeLayout, layout_and_render
+
+CANVAS_9X16 = (1080, 1920)
+
+SPEAKER_RENDERS = (
+    "frame_cinematic",   # real frame darkened as the stage, cutout on top — no server
+    "real_procedural",   # matted cutout + procedural rim/rays — matting only
+    "real_relight",      # cutout relit through img2img — ComfyUI
+    "ai_plate",          # model generates the light environment, real cutout on top
+    "ai_repertoire",     # approved text-free speaker hero from assets/ — no server
+)
+
+# The references are portrait-led: the face must still read at phone size.
+# Keep the crop recipes explicit so a design change cannot silently turn the
+# speaker back into a full figure.
+SPEAKER_LAYOUTS = {
+    "balanced": {"min_face_ratio": 0.22, "waist_factor": 4.6, "height": 0.66},
+    "closeup": {"min_face_ratio": 0.34, "waist_factor": 3.2, "height": 0.72},
+    "portrait": {"min_face_ratio": 0.40, "waist_factor": 2.8, "height": 0.76},
+}
+
+# Named light setups, each a (light colour, accent colour, rays vs shaft) recipe.
+MOODS: dict[str, dict] = {
+    "warm_shaft":  {"light": "warm",    "accent": "red",    "shape": "rays"},
+    "gold_burst":  {"light": "gold",    "accent": "yellow", "shape": "rays"},
+    "cool_door":   {"light": "cool",    "accent": "cyan",   "shape": "shaft"},
+    "cyan_split":  {"light": "cyan",    "accent": "red",    "shape": "shaft"},
+    "red_alert":   {"light": "red",     "accent": "white",  "shape": "rays"},
+    "white_stage": {"light": "white",   "accent": "red",    "shape": "shaft"},
+}
+DEFAULT_MOOD = "warm_shaft"
+
+
+def _speaker_key(speaker_name: str | None) -> str:
+    """Resolve common speaker labels to the repertoire key."""
+    value = " ".join(str(speaker_name or "").lower().split())
+    aliases = {
+        "antonio": "antonio_weil",
+        "antonio weil": "antonio_weil",
+        "pastor antonio weil": "antonio_weil",
+        "olaf": "olaf_latzel",
+        "olaf latzel": "olaf_latzel",
+        "pastor olaf latzel": "olaf_latzel",
+        "leo bigger": "leo_bigger_icf",
+    }
+    return aliases.get(value, value.replace(" ", "_")) if value else ""
+
+
+def load_speaker_hero(
+    speaker_name: str | None,
+    *,
+    variant: str | None = None,
+    seed: int = 0,
+) -> tuple[Image.Image | None, dict]:
+    """Load an approved, text-free hero from the local repertoire.
+
+    This function intentionally never generates an image. Generation is an
+    explicit offline/job step; normal rendering must be deterministic and
+    cost-free when a hero already exists.
+    """
+    key = _speaker_key(speaker_name)
+    if not key:
+        return None, {"backend": "repertoire", "status": "no_speaker"}
+    root = Path(__file__).resolve().parents[1] / "assets" / "speaker_references"
+    manifest_path = root / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        entries = manifest.get("speakers", {}).get(key, {}).get("heroes", [])
+    except (OSError, ValueError, TypeError):
+        return None, {"backend": "repertoire", "status": "manifest_unavailable", "speaker": key}
+    candidates = [
+        item for item in entries
+        if isinstance(item, dict) and item.get("approved") and item.get("text_free")
+    ]
+    if variant:
+        preferred = [item for item in candidates if str(item.get("variant")) == variant]
+        if preferred:
+            candidates = preferred
+    if not candidates:
+        return None, {"backend": "repertoire", "status": "no_approved_hero", "speaker": key}
+    item = candidates[int(seed) % len(candidates)]
+    path = root / str(item.get("path") or "")
+    if not path.is_file():
+        return None, {"backend": "repertoire", "status": "asset_missing", "path": str(path)}
+    try:
+        image = Image.open(path).convert("RGB")
+    except (OSError, ValueError):
+        return None, {"backend": "repertoire", "status": "asset_unreadable", "path": str(path)}
+    return image, {
+        "backend": "repertoire",
+        "status": "loaded",
+        "speaker": key,
+        "variant": item.get("variant"),
+        "path": str(path),
+        "provider": item.get("provider"),
+        "approved": bool(item.get("approved")),
+        "text_free": bool(item.get("text_free")),
+    }
+
+
+@dataclass
+class EpicResult:
+    image: Image.Image
+    hook: str
+    mood: str
+    speaker_render: str
+    type_layout: TypeLayout | None = None
+    gate: GateResult | None = None
+    info: dict = field(default_factory=dict)
+
+    def metrics(self) -> dict:
+        out = {
+            "hook": self.hook,
+            "mood": self.mood,
+            "speaker_render": self.speaker_render,
+            **self.info,
+        }
+        if self.type_layout is not None:
+            out["type"] = self.type_layout.metrics()
+        if self.gate is not None:
+            out["gate"] = self.gate.as_dict()
+        return out
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Stage
+# ────────────────────────────────────────────────────────────────────────────
+
+def build_stage(
+    size: tuple[int, int],
+    mood: dict,
+    *,
+    frame_bgr: np.ndarray | None = None,
+    light_center: tuple[float, float] = (0.5, 0.40),
+    seed: int = 0,
+    darken: float = 0.30,
+) -> Image.Image:
+    """Near-black stage with exactly one light source."""
+    w, h = size
+    if frame_bgr is not None:
+        base = Image.fromarray(frame_bgr[:, :, ::-1]).convert("RGB")
+        base = _cover_resize(base, size)
+        arr = np.asarray(base, dtype=np.float32) / 255.0
+        arr = arr * darken
+        canvas = Image.fromarray((arr * 255).astype(np.uint8), "RGB").filter(
+            __import__("PIL.ImageFilter", fromlist=["ImageFilter"]).GaussianBlur(max(6, w // 90))
+        )
+    else:
+        canvas = Image.new("RGB", size, (7, 8, 11))
+
+    layers = [atmo.atmospheric_haze(size, color=mood["light"], density=0.09, seed=seed)]
+    if mood["shape"] == "shaft":
+        layers.append(
+            atmo.light_shaft(
+                size,
+                apex=(light_center[0], 0.0),
+                base_width=0.62,
+                color=mood["light"],
+                intensity=0.85,
+            )
+        )
+    else:
+        layers.append(
+            atmo.god_rays(
+                size,
+                origin=(light_center[0], max(0.02, light_center[1] - 0.30)),
+                color=mood["light"],
+                intensity=0.70,
+                seed=seed,
+            )
+        )
+    layers.append(
+        atmo.back_glow(size, center=light_center, radius=0.40, color=mood["light"], intensity=0.95)
+    )
+    # Wide, weak ambient fill. Without it the frame is ~72% near-black and lands
+    # outside the reference dark_fraction band (0.34-0.67): the references are
+    # high contrast, not uniformly black.
+    layers.append(
+        atmo.back_glow(size, center=(0.5, 0.55), radius=1.15, color=mood["light"], power=1.15, intensity=0.30)
+    )
+    return atmo.apply_light_stack(canvas, layers)
+
+
+def build_ai_plate(
+    size: tuple[int, int],
+    mood: dict,
+    *,
+    theme: str = "",
+    seed: int = 0,
+) -> tuple[Image.Image | None, dict]:
+    """Generate only the *light environment* with SDXL — no people, no text.
+
+    The sleeper option among the speaker variants: the model supplies the
+    cinematic lighting the references have, while the face stays the real
+    speaker's, composited on top. Returns (None, info) when ComfyUI is down.
+    """
+    from Components.ComfyUIBackground import generate_background_image  # noqa: PLC0415
+
+    prompt = (
+        f"dark empty stage, single dramatic {mood['light']} light beam from above, "
+        f"volumetric haze, deep black background, cinematic rim lighting, "
+        f"hyper contrast, no people, no text, portrait orientation"
+    )
+    if theme:
+        prompt = f"{prompt}, mood of {theme}"
+    try:
+        image, info = generate_background_image(
+            title=theme or "sermon",
+            prompt=prompt,
+            negative_prompt="people, person, face, text, watermark, logo, letters, subtitles",
+            width=832,
+            height=1472,
+            seed=seed,
+        )
+        if info.get("backend") == "procedural":
+            return None, info
+        return _cover_resize(image.convert("RGB"), size), info
+    except (OSError, ValueError, RuntimeError) as exc:
+        return None, {"backend": "error", "reason": f"{type(exc).__name__}: {exc}"}
+
+
+def relight_subject(
+    subject_rgba: Image.Image,
+    mood: dict,
+    *,
+    denoise: float = 0.30,
+    seed: int = 0,
+) -> tuple[Image.Image, dict]:
+    """Relight the real cutout through img2img at low denoise.
+
+    Low denoise on purpose: the face has to stay recognisably the same person.
+    The alpha is preserved from the original, since the edit path is RGB-only.
+    """
+    import tempfile  # noqa: PLC0415
+
+    from Components.ComfyUIBackground import generate_edited_image  # noqa: PLC0415
+
+    # generate_edited_image takes a path, not an Image.
+    tmp = Path(tempfile.gettempdir()) / f"parakeet_relight_{seed}.png"
+    subject_rgba.convert("RGB").save(tmp)
+
+    try:
+        edited, info = generate_edited_image(
+            input_image=str(tmp),
+            prompt=(
+                f"dramatic {mood['light']} cinematic rim lighting on the person, "
+                f"studio key light, deep shadows, high contrast portrait, sharp detail"
+            ),
+            negative_prompt="blurry, distorted face, extra limbs, text, watermark",
+            denoise=denoise,
+            seed=seed,
+        )
+        if info.get("backend") in {"fallback", "error"}:
+            return subject_rgba, info
+        out = edited.convert("RGB").resize(subject_rgba.size, Image.LANCZOS).convert("RGBA")
+        out.putalpha(subject_rgba.split()[-1])
+        return out, info
+    except (OSError, ValueError, RuntimeError) as exc:
+        return subject_rgba, {"backend": "error", "reason": f"{type(exc).__name__}: {exc}"}
+
+
+def build_ai_hero(
+    size: tuple[int, int],
+    mood: dict,
+    *,
+    speaker_hint: str = "a middle-aged male preacher",
+    theme: str = "",
+    seed: int = 0,
+) -> tuple[Image.Image | None, dict]:
+    """Fully synthetic hero portrait — no real likeness is used as input.
+
+    Included because it was asked for as a comparison point. Note the person in
+    the result is invented, so it should not be presented as a photograph of the
+    actual speaker.
+    """
+    from Components.ComfyUIBackground import generate_background_image  # noqa: PLC0415
+
+    prompt = (
+        f"{speaker_hint}, dramatic {mood['light']} backlight, dark stage, "
+        f"hyper saturated, high contrast, emotionally expressive, cinematic portrait, "
+        f"vertical composition, no text"
+    )
+    if theme:
+        prompt = f"{prompt}, theme of {theme}"
+    try:
+        image, info = generate_background_image(
+            title=theme or "portrait",
+            prompt=prompt,
+            negative_prompt="text, watermark, logo, letters, deformed, extra limbs",
+            width=832,
+            height=1472,
+            seed=seed,
+        )
+        if info.get("backend") == "procedural":
+            return None, info
+        return _cover_resize(image.convert("RGB"), size), info
+    except (OSError, ValueError, RuntimeError) as exc:
+        return None, {"backend": "error", "reason": f"{type(exc).__name__}: {exc}"}
+
+
+def _cover_resize(image: Image.Image, size: tuple[int, int]) -> Image.Image:
+    """Resize preserving aspect so the image covers `size`, then centre-crop."""
+    tw, th = size
+    scale = max(tw / image.width, th / image.height)
+    resized = image.resize((max(1, int(image.width * scale)), max(1, int(image.height * scale))), Image.LANCZOS)
+    left = (resized.width - tw) // 2
+    top = (resized.height - th) // 2
+    return resized.crop((left, top, left + tw, top + th))
+
+
+def frame_subject(
+    subject_rgba: Image.Image,
+    face_box: tuple[int, int, int, int] | None,
+    *,
+    min_face_ratio: float = 0.22,
+    waist_factor: float = 4.6,
+) -> Image.Image:
+    """Crop a full standing figure down to waist-up so the face reads large.
+
+    A whole-body cutout scaled to fit 9:16 leaves a face maybe 5% of the frame;
+    the references put the head at 20-35%. The crop is top-anchored, so any face
+    coordinates measured on the original stay valid.
+    """
+    if face_box is None:
+        return subject_rgba
+    _, fy, _, fh = face_box
+    if fh / max(1, subject_rgba.height) >= min_face_ratio:
+        return subject_rgba
+    waist = int(fy + fh * waist_factor)
+    if waist >= subject_rgba.height:
+        return subject_rgba
+    cropped = subject_rgba.crop((0, 0, subject_rgba.width, waist))
+    bbox = cropped.split()[-1].getbbox()
+    return cropped.crop(bbox) if bbox else cropped
+
+
+def place_speaker(
+    canvas: Image.Image,
+    subject_rgba: Image.Image,
+    *,
+    mood: dict,
+    target_height_ratio: float = 0.62,
+    anchor_x: float = 0.5,
+    bottom_ratio: float = 1.0,
+    rim: bool = True,
+) -> tuple[Image.Image, tuple[int, int, int, int], Image.Image]:
+    """Composite the cutout, bottom-anchored. Returns canvas, box, placed alpha."""
+    w, h = canvas.size
+    subject = subject_rgba.convert("RGBA")
+    target_h = int(h * target_height_ratio)
+    scale = target_h / max(1, subject.height)
+    subject = subject.resize(
+        (max(1, int(subject.width * scale)), max(1, int(subject.height * scale))), Image.LANCZOS
+    )
+    if rim:
+        subject = atmo.rim_light_from_alpha(subject, color=mood["light"], width=max(3, w // 260))
+
+    x = int(anchor_x * w - subject.width / 2)
+    y = int(bottom_ratio * h - subject.height)
+    out = canvas.convert("RGBA")
+    out.alpha_composite(subject, (x, y))
+
+    # Full-canvas alpha at the final position. The halo metric has to compare
+    # the composite against *this*, not against the raw cutout — those differ in
+    # both scale and position, and comparing them measures nothing.
+    placed_alpha = Image.new("L", (w, h), 0)
+    placed_alpha.paste(subject.split()[-1], (x, y))
+
+    return out.convert("RGB"), (x, y, x + subject.width, y + subject.height), placed_alpha
+
+
+def compose(
+    hook: str,
+    *,
+    subject_rgba: Image.Image | None = None,
+    frame_bgr: np.ndarray | None = None,
+    size: tuple[int, int] = CANVAS_9X16,
+    mood: str = DEFAULT_MOOD,
+    speaker_render: str = "real_procedural",
+    speaker_layout: str = "closeup",
+    accent_line: int | None = None,
+    font: str = "anton",
+    text_anchor: str = "top",
+    seed: int = 0,
+    gate_tier: str = "normal",
+    face_box: tuple[int, int, int, int] | None = None,
+    subject_face_box: tuple[int, int, int, int] | None = None,
+    subject_height_ratio: float | None = None,
+    speaker_bottom_ratio: float | None = None,
+    speaker_name: str | None = None,
+    hero_variant: str | None = None,
+    theme: str = "",
+    story_asset_ids: tuple[str, ...] | list[str] = (),
+    light_direction: str = "upper_left",
+) -> EpicResult:
+    """Render one thumbnail and measure it."""
+    w, h = size
+    recipe = MOODS.get(mood, MOODS[DEFAULT_MOOD])
+    if speaker_layout not in SPEAKER_LAYOUTS:
+        raise ValueError(f"unknown speaker layout: {speaker_layout!r}")
+    layout_recipe = SPEAKER_LAYOUTS[speaker_layout]
+
+    light_center = (0.5, 0.38)
+    render_info: dict = {}
+
+    from Components.ThumbnailStoryAssets import add_foreground_assets, resolve_story_assets
+
+    story_layers = resolve_story_assets(story_asset_ids, size)
+    if story_layers["background"] is not None:
+        render_info["story_background"] = story_layers["background_id"]
+        render_info["story_focus_box"] = story_layers["story_focus_box"]
+        layout_recipe = SPEAKER_LAYOUTS["balanced"]
+    if story_layers["rejected"]:
+        render_info["story_assets_rejected"] = story_layers["rejected"]
+
+    plate = None
+    if speaker_render == "ai_repertoire":
+        plate, repertoire_info = load_speaker_hero(
+            speaker_name, variant=hero_variant, seed=seed
+        )
+        render_info["repertoire"] = repertoire_info
+        if plate is None:
+            render_info["repertoire_fallback"] = "real_procedural"
+            speaker_render = "real_procedural"
+        else:
+            plate = _cover_resize(plate, size)
+    if speaker_render in {"ai_plate", "ai_hero"}:
+        builder = build_ai_plate if speaker_render == "ai_plate" else build_ai_hero
+        plate, plate_info = builder(size, recipe, theme=theme, seed=seed)
+        render_info["plate"] = plate_info
+        if plate is None:
+            # Degrade instead of failing: a missing ComfyUI must not cost us a
+            # thumbnail in the Sunday pipeline.
+            render_info["plate_fallback"] = "procedural_stage"
+
+    if story_layers["background"] is not None:
+        canvas = story_layers["background"].convert("RGB")
+    elif plate is not None:
+        canvas = plate
+    else:
+        canvas = build_stage(
+            size,
+            recipe,
+            frame_bgr=frame_bgr if speaker_render == "frame_cinematic" else None,
+            light_center=light_center,
+            seed=seed,
+        )
+
+    if speaker_render == "real_relight" and subject_rgba is not None:
+        subject_rgba, relight_info = relight_subject(subject_rgba, recipe, seed=seed)
+        render_info["relight"] = relight_info
+    if speaker_render in {"ai_hero", "ai_repertoire"}:
+        # The generated plate already contains the (synthetic) person.
+        subject_rgba = None
+
+    block_top = 0.045 if text_anchor == "top" else 0.53
+    type_layout = layout_and_render(
+        hook,
+        canvas_size=size,
+        accent_line=accent_line,
+        accent_color=recipe["accent"],
+        font=font,
+        block_top_ratio=block_top,
+        seed=seed,
+    )
+
+    # The upper title lines can sit behind the speaker in the top-title layout.
+    # With a lower title block the speaker is deliberately above the type, so
+    # every line must remain readable instead of disappearing into the torso.
+    split = 0 if text_anchor != "top" else max(1, len(type_layout.lines) - 1)
+    back_layer, front_layer = _split_type_layer(type_layout, split)
+
+    canvas = Image.alpha_composite(canvas.convert("RGBA"), back_layer).convert("RGB")
+
+    subject_box = None
+    placed_alpha = None
+    if subject_rgba is not None:
+        framed = frame_subject(
+            subject_rgba,
+            subject_face_box,
+            min_face_ratio=layout_recipe["min_face_ratio"],
+            waist_factor=layout_recipe["waist_factor"],
+        )
+        target_height = (
+            float(subject_height_ratio)
+            if subject_height_ratio is not None
+            else (0.56 if story_layers["background"] is not None else float(layout_recipe["height"]))
+        )
+        bottom_ratio = (
+            float(speaker_bottom_ratio)
+            if speaker_bottom_ratio is not None
+            else (0.86 if text_anchor != "top" else 1.0)
+        )
+        canvas, subject_box, placed_alpha = place_speaker(
+            canvas,
+            framed,
+            mood=recipe,
+            target_height_ratio=target_height,
+            anchor_x=float(story_layers["speaker_anchor_x"] or 0.5),
+            bottom_ratio=bottom_ratio,
+        )
+
+    canvas, foreground_report = add_foreground_assets(
+        canvas,
+        story_layers["foreground"],
+        light_direction=light_direction,
+    )
+    if foreground_report:
+        render_info["story_foreground"] = foreground_report
+
+    canvas = Image.alpha_composite(canvas.convert("RGBA"), front_layer).convert("RGB")
+
+    canvas = atmo.bloom(canvas, threshold=0.74, radius=max(24, w // 18), strength=0.5)
+    canvas = atmo.vignette(canvas, strength=0.30)
+    canvas = atmo.cinematic_finish(canvas)
+    canvas = atmo.film_grain(canvas, opacity=0.028, seed=seed)
+
+    gate = run_gate(
+        canvas,
+        tier=gate_tier,
+        title=hook,
+        rendered_lines=type_layout.texts,
+        text_alpha=type_layout.alpha,
+        text_block_box=type_layout.block_box,
+        cap_height_px=type_layout.mean_cap_height,
+        face_box=face_box,
+        subject_alpha=placed_alpha,
+        line_fill_ratio=max((ln.fill_ratio for ln in type_layout.lines), default=0.0),
+        accent_present=accent_line is not None,
+        bands=load_bands(),
+    )
+
+    story_focus_box = story_layers.get("story_focus_box")
+    if story_focus_box and placed_alpha is not None:
+        x1, y1, x2, y2 = (int(value) for value in story_focus_box)
+        subject_arr = np.asarray(placed_alpha, dtype=np.uint8)[y1:y2, x1:x2] > 8
+        text_arr = np.asarray(type_layout.alpha, dtype=np.uint8)[y1:y2, x1:x2] > 8
+        if subject_arr.size:
+            occupied = np.logical_or(subject_arr, text_arr)
+            story_occlusion_ratio = float(occupied.mean())
+            gate.metrics["story_focus_occlusion_ratio"] = round(story_occlusion_ratio, 5)
+            if story_occlusion_ratio > 0.62:
+                gate.hard_failures.append("story_focus_occluded")
+                gate.passed = False
+
+    return EpicResult(
+        image=canvas,
+        hook=hook,
+        mood=mood,
+        speaker_render=speaker_render,
+        type_layout=type_layout,
+        gate=gate,
+        info={
+            "subject_box": list(subject_box) if subject_box else None,
+            "speaker_layout": speaker_layout,
+            "text_anchor": text_anchor,
+            "seed": seed,
+            **render_info,
+        },
+    )
+
+
+def _split_type_layer(layout: TypeLayout, split: int) -> tuple[Image.Image, Image.Image]:
+    """Cut the rendered type layer into back (above) and front (below) halves."""
+    if split >= len(layout.lines):
+        empty = Image.new("RGBA", layout.image.size, (0, 0, 0, 0))
+        return layout.image, empty
+
+    boundary = layout.lines[split].box[1]
+    back = layout.image.copy()
+    front = layout.image.copy()
+    w, h = layout.image.size
+
+    clear = Image.new("RGBA", (w, max(0, h - boundary)), (0, 0, 0, 0))
+    back.paste(clear, (0, boundary))
+    clear_top = Image.new("RGBA", (w, boundary), (0, 0, 0, 0))
+    front.paste(clear_top, (0, 0))
+    return back, front
+
+
+def save(result: EpicResult, path: str | Path) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    result.image.save(path)
+    return path

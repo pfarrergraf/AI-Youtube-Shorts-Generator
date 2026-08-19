@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "speaker": "Thomas Herrmann",
+  "source_video": "/home/benjamin_graf/parakeet_uv/downloads/Endzeit - Offenbarung der Zukunft ｜ Thomas Herrmann ｜ Move Church.mp4",
+  "source_url": "https://www.youtube.com/watch?v=BVIuszW2Alc",
+  "note": "Exact real-video pose anchors. These are identity/gesture sources, not approved finished heroes.",
+  "frames": [
+    {"path": "01_empathic_open_palms.png", "timestamp_sec": 980, "use": "side gesture / identity"},
+    {"path": "02_urgent_lean_in.png", "timestamp_sec": 2380, "use": "urgent lean-in / identity"},
+    {"path": "03_stage_smile_side.png", "timestamp_sec": 740, "use": "smile / source contains stage graphic"},
+    {"path": "04_precision_point.png", "timestamp_sec": 2300, "use": "precision point"},
+    {"path": "05_raised_warning_hand.png", "timestamp_sec": 1700, "use": "raised warning hand / identity"},
+    {"path": "06_reflective_look_down.png", "timestamp_sec": 1740, "use": "reflective look down"},
+    {"path": "07_lectern_explanation.png", "timestamp_sec": 1460, "use": "explanation / source contains slide text"},
+    {"path": "08_steady_conviction.png", "timestamp_sec": 1940, "use": "steady conviction"},
+    {"path": "09_open_hand_smile.png", "timestamp_sec": 220, "use": "open hand / smile / identity"},
+    {"path": "10_precision_point_side.png", "timestamp_sec": 2220, "use": "precision point side"}
+  ]
+}

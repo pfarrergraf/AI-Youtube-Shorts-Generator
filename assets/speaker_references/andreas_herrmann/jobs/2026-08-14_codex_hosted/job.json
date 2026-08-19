@@ -1,0 +1,25 @@
+{
+  "provider": "codex_hosted_imagegen",
+  "created": "2026-08-14",
+  "status": "manual_review_required",
+  "outputs": [
+    {
+      "path": "andreas_herrmann_candidate_left_blue_gold_v2.png",
+      "variant": "left_blue_gold_candidate"
+    },
+    {
+      "path": "andreas_herrmann_candidate_close_red_gold_v1.png",
+      "variant": "close_red_gold_blessing_candidate"
+    },
+    {
+      "path": "andreas_herrmann_candidate_hope_beam_v1.png",
+      "variant": "hope_beam_candidate"
+    }
+  ],
+  "supersedes": "andreas_herrmann_candidate_left_blue_gold_v1.png",
+  "references": [
+    "../../source/andreas_herrmann_official_movechurch.jpg",
+    "../../source/andreas_herrmann_stage_movechurch.jpg"
+  ],
+  "prompt_summary": "Three identity-preserving, photorealistic 9:16 sermon heroes: calm blue/gold stage, authoritative red/gold blessing close-up, and reverent wide hope-beam composition. Each keeps a separate negative-space region for deterministic typography and contains no text, logo, watermark, captions, lower third or second person."
+}

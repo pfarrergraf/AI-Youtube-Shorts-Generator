@@ -1,103 +1,172 @@
+"""Detect single vs. multiple speakers in a video for routing to appropriate cropper."""
+
 import cv2
 import numpy as np
-#Face Detection function
-def detect_faces(video_file):
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+import os
 
-    # Load the video
-    cap = cv2.VideoCapture(video_file)
 
-    faces = []
+def _configure_dnn_backend(net):
+    """Enable CUDA for DNN backend if available."""
+    if not hasattr(cv2, "cuda"):
+        return
 
-    # Detect and store unique faces
-    while len(faces) < 5:
+    try:
+        cuda_devices = cv2.cuda.getCudaEnabledDeviceCount()
+    except cv2.error:
+        cuda_devices = 0
+
+    if cuda_devices <= 0:
+        return
+
+    try:
+        net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+        net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA_FP16)
+    except cv2.error:
+        pass
+
+
+def detect_speakers_in_video(video_path, sample_interval=10, confidence_threshold=0.5):
+    """Analyze video to determine if it has one or multiple visible speakers.
+
+    Args:
+        video_path: Path to video file
+        sample_interval: Analyze every Nth frame (default 10 = ~3 fps @ 30fps source)
+        confidence_threshold: Min confidence for face detection (0.0-1.0)
+
+    Returns:
+        {
+            'speaker_count': 1 or 2+ (int),
+            'is_multi_speaker': bool,
+            'face_detections': [{frame_idx, count, faces}, ...],
+            'confidence': float (0-1, how confident in the detection),
+        }
+    """
+    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    prototxt_path = os.path.join(script_dir, "models", "deploy.prototxt")
+    model_path = os.path.join(script_dir, "models", "res10_300x300_ssd_iter_140000_fp16.caffemodel")
+
+    use_dnn = os.path.exists(prototxt_path) and os.path.exists(model_path)
+    if use_dnn:
+        net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
+        _configure_dnn_backend(net)
+    else:
+        face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        )
+
+    cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
+    if not cap.isOpened():
+        print(f"[SpeakerDetection] Error: Could not open {video_path}")
+        return {
+            'speaker_count': 1,
+            'is_multi_speaker': False,
+            'face_detections': [],
+            'confidence': 0.0,
+        }
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if not fps or fps <= 0:
+        fps = 30.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    face_detections = []
+    frame_count = 0
+    multi_speaker_count = 0
+    single_speaker_count = 0
+
+    while True:
         ret, frame = cap.read()
-        if ret:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            detected_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        if not ret:
+            break
 
-            # Iterate through the detected faces
-            for face in detected_faces:
-                # Check if the face is already in the list of faces
-                if not any(np.array_equal(face, f) for f in faces):
-                    faces.append(face)
+        if frame_count % sample_interval == 0:
+            detected_faces = []
+            if use_dnn:
+                h, w = frame.shape[:2]
+                blob = cv2.dnn.blobFromImage(
+                    cv2.resize(frame, (300, 300)), 1.0,
+                    (300, 300), (104.0, 177.0, 123.0)
+                )
+                net.setInput(blob)
+                detections = net.forward()
+                for i in range(detections.shape[2]):
+                    confidence = float(detections[0, 0, i, 2])
+                    if confidence > confidence_threshold:
+                        box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                        (x1, y1, x2, y2) = box.astype("int")
+                        detected_faces.append({
+                            'x1': int(x1),
+                            'y1': int(y1),
+                            'x2': int(x2),
+                            'y2': int(y2),
+                            'confidence': confidence,
+                        })
+            else:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(
+                    gray, scaleFactor=1.1, minNeighbors=8, minSize=(30, 30)
+                )
+                for (x, y, w, h) in faces:
+                    detected_faces.append({
+                        'x1': int(x),
+                        'y1': int(y),
+                        'x2': int(x + w),
+                        'y2': int(y + h),
+                        'confidence': 1.0,
+                    })
 
-            # Print the number of unique faces detected so far
-            print(f"Number of unique faces detected: {len(faces)}")
+            if len(detected_faces) >= 2:
+                multi_speaker_count += 1
+            elif len(detected_faces) == 1:
+                single_speaker_count += 1
 
-    # Release the video capture object
+            face_detections.append({
+                'frame_idx': frame_count,
+                'timestamp_sec': frame_count / fps,
+                'count': len(detected_faces),
+                'faces': detected_faces,
+            })
+
+        frame_count += 1
+
     cap.release()
 
-    # If faces detected, return the list of faces
-    if len(faces) > 0:
-        return faces
-    
-def crop_video(faces, input_file, output_file):
-    try:
-        if len(faces) > 0:
-            # Constants for cropping
-            CROP_RATIO = 0.9  # Adjust the ratio to control how much of the face is visible in the cropped video
-            VERTICAL_RATIO = 9 / 16  # Aspect ratio for the vertical video
+    total_samples = len(face_detections)
+    if total_samples == 0:
+        return {
+            'speaker_count': 1,
+            'is_multi_speaker': False,
+            'face_detections': face_detections,
+            'confidence': 0.0,
+        }
 
-            # Read the input video
-            cap = cv2.VideoCapture(input_file)
+    # Determine speaker count based on prevalence
+    multi_speaker_ratio = multi_speaker_count / total_samples
+    single_speaker_ratio = single_speaker_count / total_samples
 
-            # Get the frame dimensions
-            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    if multi_speaker_ratio > 0.3:
+        speaker_count = 2
+        is_multi = True
+        confidence = multi_speaker_ratio
+    elif single_speaker_ratio > 0.5:
+        speaker_count = 1
+        is_multi = False
+        confidence = single_speaker_ratio
+    else:
+        speaker_count = 1
+        is_multi = False
+        confidence = 0.5
 
-            # Calculate the target width and height for cropping (vertical format)
-            target_height = int(frame_height * CROP_RATIO)
-            target_width = int(target_height * VERTICAL_RATIO)
+    print(
+        f"[SpeakerDetection] {video_path}: "
+        f"{speaker_count} speaker(s) detected "
+        f"(single: {single_speaker_ratio:.1%}, multi: {multi_speaker_ratio:.1%}, "
+        f"confidence: {confidence:.1%})"
+    )
 
-            # Create a VideoWriter object to save the output video
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            output_video = cv2.VideoWriter(output_file, fourcc, 30.0, (target_width, target_height))
-
-            # Loop through each frame of the input video
-            while True:
-                ret, frame = cap.read()
-
-                # If no more frames, break out of the loop
-                if not ret:
-                    break
-
-                # Iterate through each detected face
-                for face in faces:
-                    # Unpack the face coordinates
-                    x, y, w, h = face
-
-                    # Calculate the crop coordinates
-                    crop_x = max(0, x + (w - target_width) // 2)  # Adjust the crop region to center the face
-                    crop_y = max(0, y + (h - target_height) // 2)
-                    crop_x2 = min(crop_x + target_width, frame_width)
-                    crop_y2 = min(crop_y + target_height, frame_height)
-
-                    # Crop the frame based on the calculated crop coordinates
-                    cropped_frame = frame[crop_y:crop_y2, crop_x:crop_x2]
-
-                    # Resize the cropped frame to the target dimensions
-                    resized_frame = cv2.resize(cropped_frame, (target_width, target_height))
-
-                    # Write the resized frame to the output video
-                    output_video.write(resized_frame)
-
-            cap.release()
-            output_video.release()
-
-            print("Video cropped successfully.")
-        else:
-            print("No faces detected in the video.")
-    except Exception as e:
-        print(f"Error during video cropping: {str(e)}")
-
-
-    return None
-if __name__ == "__main__":
-    input = r"Short.mp4"
-    faces = detect_faces(input)
-    print(faces)
-    crop_video(faces, input, "Cropped.mp4")
-    print("DONE")
-
-    
+    return {
+        'speaker_count': speaker_count,
+        'is_multi_speaker': is_multi,
+        'face_detections': face_detections,
+        'confidence': confidence,
+    }

@@ -67,23 +67,19 @@ FONT_ROLES = {
     "bold": (
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "C:/Windows/Fonts/arialbd.ttf",
-        "C:/Windows/Fonts/calibrib.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
     ),
     "condensed": (
-        "C:/Windows/Fonts/arialnb.ttf",
-        "C:/Windows/Fonts/impact.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf",
     ),
     "script": (
-        "C:/Windows/Fonts/segoesc.ttf",
-        "C:/Windows/Fonts/comicz.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSerif-Italic.ttf",
     ),
     "serif": (
         "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
-        "C:/Windows/Fonts/georgiab.ttf",
-        "C:/Windows/Fonts/timesbd.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSerif-Bold.ttf",
     ),
 }
 _CONNECTOR_WORDS = {
