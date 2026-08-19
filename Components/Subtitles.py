@@ -56,6 +56,7 @@ CAPTION_STYLE_PRESETS = {
         "outline_ratio": 0.0035,
         "shadow_ratio": 0.0012,
         "uppercase": False,
+        "font_ratio": 0.053,
         "emphasis_scale": 1.0,
         "max_chars_per_line": MAX_CHARS_PER_LINE,
         "active_ramp": False,
@@ -74,12 +75,14 @@ CAPTION_STYLE_PRESETS = {
         "outline_ratio": 0.006,
         "shadow_ratio": 0.003,
         "uppercase": False,
+        # Measured against the reference clips: their caption cap height is
+        # ~5% of frame height, the old ratio yields 3.6% in this face.
+        "font_ratio": 0.070,
         "emphasis_scale": 1.5,
-        # Barlow Semi Condensed is far narrower than the substituted face the
-        # 18-character budget was tuned against, and an oversized word counts
-        # 1.5x — keeping the old budget would split two-word captions that
-        # comfortably fit one line.
-        "max_chars_per_line": 25,
+        # Fallback only — the real budget is measured from the font (see
+        # _measured_char_budget); a guessed character count either wraps
+        # captions that fit or lets them run past the frame edge.
+        "max_chars_per_line": 14,
         "active_ramp": True,
         "solo_slow": False,
     },
@@ -95,8 +98,9 @@ CAPTION_STYLE_PRESETS = {
         "outline_ratio": 0.006,
         "shadow_ratio": 0.003,
         "uppercase": True,
+        "font_ratio": 0.070,
         "emphasis_scale": 1.5,
-        "max_chars_per_line": 25,
+        "max_chars_per_line": 14,
         "active_ramp": True,
         "solo_slow": True,
     },
@@ -294,6 +298,42 @@ def segment_words_into_phrases(words):
     return _merge_short_phrases(phrases)
 
 
+_CHAR_BUDGET_CACHE: dict[tuple, int] = {}
+
+
+def _measured_char_budget(preset, font_size, usable_width, fallback):
+    """How many average characters actually fit across *usable_width*.
+
+    A hand-picked character count silently goes wrong whenever the face or
+    the size changes: too low and captions wrap that would have fit, too high
+    and they run past the frame edge with no error anywhere.
+    """
+    font_dir = preset.get("fontsdir")
+    if not font_dir or not os.path.isdir(font_dir):
+        return fallback
+
+    key = (font_dir, preset["fontname"], font_size, usable_width)
+    if key in _CHAR_BUDGET_CACHE:
+        return _CHAR_BUDGET_CACHE[key]
+
+    try:
+        from PIL import ImageFont
+
+        candidates = sorted(
+            name for name in os.listdir(font_dir) if name.lower().endswith((".ttf", ".otf"))
+        )
+        black = [name for name in candidates if "black" in name.lower()] or candidates
+        font = ImageFont.truetype(os.path.join(font_dir, black[0]), font_size)
+        sample = "der Samen einer Erweckung"
+        average = font.getlength(sample) / len(sample)
+        budget = max(8, int(usable_width / average)) if average > 0 else fallback
+    except Exception:
+        budget = fallback
+
+    _CHAR_BUDGET_CACHE[key] = budget
+    return budget
+
+
 def resolve_caption_style(style):
     name = str(style or DEFAULT_CAPTION_STYLE).strip().lower()
     return CAPTION_STYLE_PRESETS.get(name, CAPTION_STYLE_PRESETS[DEFAULT_CAPTION_STYLE])
@@ -359,8 +399,31 @@ def _phrase_is_slow(phrase):
     return _median(onsets) >= SLOW_MEDIAN_ONSET_SEC
 
 
+def _solo_units(phrase):
+    """Group a phrase into the smallest units that still mean something.
+
+    Splitting strictly per word puts a lone "einer" full-screen, which reads
+    as a glitch rather than emphasis. Function words therefore ride along with
+    the content word they belong to, giving the one-or-two-word units the
+    reference clips use.
+    """
+    units: list[list[dict]] = []
+    pending: list[dict] = []
+    for word in phrase:
+        pending.append(word)
+        if _emphasis_token(word.get("text")) not in DE_STOPWORDS:
+            units.append(pending)
+            pending = []
+    if pending:
+        if units:
+            units[-1].extend(pending)
+        else:
+            units.append(pending)
+    return units
+
+
 def split_slow_phrases(phrases):
-    """Break slowly spoken phrases into one-word events.
+    """Break slowly spoken phrases into single-unit events.
 
     A solo event has no neighbours, so scaling it cannot reflow anything —
     that is what makes the pop-in animation safe where a per-word ``\\fs``
@@ -371,9 +434,15 @@ def split_slow_phrases(phrases):
         if not phrase or not _phrase_is_slow(phrase):
             result.append(phrase)
             continue
-        for word in phrase:
-            solo = dict(word)
-            solo["solo"] = True
+        for unit in _solo_units(phrase):
+            solo = {
+                "text": " ".join(str(w["text"]).strip() for w in unit),
+                "start": unit[0]["start"],
+                "end": unit[-1]["end"],
+                "solo": True,
+            }
+            if any(w.get("emphasis") for w in unit):
+                solo["emphasis"] = True
             result.append([solo])
     return result
 
@@ -586,7 +655,7 @@ def _drop_leading_partial_phrase(phrases, *, subtitle_start_time, transcriptions
     return phrases
 
 
-def _word_scales(phrase, preset):
+def _word_scales(phrase, preset, max_chars=None):
     """Per-word size multipliers, constant for every event of the phrase.
 
     Constant is the whole point: each word's Dialogue event re-renders the
@@ -603,7 +672,7 @@ def _word_scales(phrase, preset):
         word_scale = scale
         # A long German compound at 1.5× overflows the frame on its own;
         # step it down rather than shrink the whole caption.
-        budget = preset["max_chars_per_line"]
+        budget = max_chars or preset["max_chars_per_line"]
         while word_scale > 1.0 and len(words[index]["text"]) * word_scale > budget:
             word_scale -= 0.25
         scales[index] = max(1.0, word_scale)
@@ -649,13 +718,16 @@ def _render_word(text, *, active, scale, base_font_size, preset):
     return f"{{{opening}}}{escaped}{closing}"
 
 
-def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_font_size=100):
+def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_font_size=100,
+                                   max_chars=None):
     if preset is None:
         preset = CAPTION_STYLE_PRESETS[DEFAULT_CAPTION_STYLE]
+    if max_chars is None:
+        max_chars = preset["max_chars_per_line"]
 
-    scales = _word_scales(phrase, preset)
+    scales = _word_scales(phrase, preset, max_chars=max_chars)
     wrapped_lines, line_ranges = _build_phrase_layout_metadata(
-        phrase, scales=scales, max_chars=preset["max_chars_per_line"],
+        phrase, scales=scales, max_chars=max_chars,
     )
     lines = []
 
@@ -676,10 +748,17 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
     return r"\N".join(lines)
 
 
-def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_height, margin_v):
+def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_height, margin_v,
+                          max_chars=None):
     """One big word, centred, popping in — used when the speaker slows down."""
     text = _escape_ass_text(safe_upper(word["text"]) if preset["uppercase"] else word["text"])
     size = int(round(base_font_size * max(1.25, preset["emphasis_scale"])))
+    # A two-word unit at 1.5x can outrun the frame; scale it to the same
+    # character budget the wrapped captions use.
+    budget = max_chars or preset["max_chars_per_line"]
+    length = len(word["text"])
+    if length > budget:
+        size = max(base_font_size, int(size * budget / length))
     # \pos measures from the top, MarginV from the bottom — land the solo word
     # on the same optical line the wrapped captions occupy.
     pos_y = max(size, int(video_height - margin_v - size * 0.5))
@@ -752,11 +831,16 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
     preset = resolve_caption_style(style)
 
     # slightly smaller than before
-    font_size = max(33, int(video_height * 0.053) - 2)
+    font_size = max(33, int(video_height * preset["font_ratio"]) - 2)
 
     # captions centered in the frame (~45% from bottom), well above the lower-third overlay
     margin_v = max(500, int(video_height * 0.45))
     margin_h = max(70, int(video_width * 0.10))
+
+    max_chars = _measured_char_budget(
+        preset, font_size, video_width - 2 * max(70, int(video_width * 0.10)),
+        preset["max_chars_per_line"],
+    )
 
     outline = max(3, int(video_height * preset["outline_ratio"]))
     shadow = max(1, int(video_height * preset["shadow_ratio"]))
@@ -790,7 +874,13 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
 
     if word_events:
         if preset["solo_slow"]:
+            before = len(word_events)
             word_events = split_slow_phrases(word_events)
+            solo_count = sum(1 for phrase in word_events if phrase and phrase[0].get("solo"))
+            # Worth printing on every run: solo mode silently does nothing when
+            # the timings are synthetic, and the result then looks identical to
+            # the emphasis style with no indication why.
+            print(f"[Subtitles] Word-by-word: {solo_count} solo word(s) from {before} phrase(s)")
         word_events = _normalise_phrase_timings(word_events)
 
         for phrase in word_events:
@@ -812,10 +902,12 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
                         video_width=video_width,
                         video_height=video_height,
                         margin_v=margin_v,
+                        max_chars=max_chars,
                     )
                 else:
                     highlight_text = _build_highlight_text_for_word(
                         phrase, word_idx, preset=preset, base_font_size=font_size,
+                        max_chars=max_chars,
                     )
                     # Fade-in only when the phrase first appears (first word)
                     prefix = r"{\fad(100,0)}" if word_idx == 0 else ""
