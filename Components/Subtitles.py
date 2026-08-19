@@ -57,6 +57,7 @@ CAPTION_STYLE_PRESETS = {
         "shadow_ratio": 0.0012,
         "uppercase": False,
         "emphasis_scale": 1.0,
+        "max_chars_per_line": MAX_CHARS_PER_LINE,
         "active_ramp": False,
         "solo_slow": False,
     },
@@ -74,6 +75,11 @@ CAPTION_STYLE_PRESETS = {
         "shadow_ratio": 0.003,
         "uppercase": False,
         "emphasis_scale": 1.5,
+        # Barlow Semi Condensed is far narrower than the substituted face the
+        # 18-character budget was tuned against, and an oversized word counts
+        # 1.5x — keeping the old budget would split two-word captions that
+        # comfortably fit one line.
+        "max_chars_per_line": 25,
         "active_ramp": True,
         "solo_slow": False,
     },
@@ -90,6 +96,7 @@ CAPTION_STYLE_PRESETS = {
         "shadow_ratio": 0.003,
         "uppercase": True,
         "emphasis_scale": 1.5,
+        "max_chars_per_line": 25,
         "active_ramp": True,
         "solo_slow": True,
     },
@@ -410,7 +417,8 @@ def _weighted_len(words, weights, start, stop):
     return total + (len(span) - 1)
 
 
-def wrap_phrase_words(phrase_words, max_lines=MAX_LINES_PER_CAPTION, weights=None):
+def wrap_phrase_words(phrase_words, max_lines=MAX_LINES_PER_CAPTION, weights=None,
+                      max_chars=MAX_CHARS_PER_LINE):
     words = [w for w in phrase_words if w]
     if not words:
         return [""]
@@ -425,7 +433,7 @@ def wrap_phrase_words(phrase_words, max_lines=MAX_LINES_PER_CAPTION, weights=Non
     else:
         weights = list(weights[:len(words)]) + [1.0] * max(0, len(words) - len(weights))
 
-    if _weighted_len(words, weights, 0, len(words)) <= MAX_CHARS_PER_LINE:
+    if _weighted_len(words, weights, 0, len(words)) <= max_chars:
         return [_join_words(words)]
 
     best = None
@@ -448,8 +456,8 @@ def wrap_phrase_words(phrase_words, max_lines=MAX_LINES_PER_CAPTION, weights=Non
         score += abs(len1 - TARGET_CHARS_PER_LINE) * 1.0
         score += abs(len2 - TARGET_CHARS_PER_LINE) * 1.0
 
-        if longest > MAX_CHARS_PER_LINE:
-            score += (longest - MAX_CHARS_PER_LINE) * 10
+        if longest > max_chars:
+            score += (longest - max_chars) * 10
 
         if shortest < 7:
             score += (7 - shortest) * 5
@@ -595,15 +603,16 @@ def _word_scales(phrase, preset):
         word_scale = scale
         # A long German compound at 1.5× overflows the frame on its own;
         # step it down rather than shrink the whole caption.
-        while word_scale > 1.0 and len(words[index]["text"]) * word_scale > MAX_CHARS_PER_LINE:
+        budget = preset["max_chars_per_line"]
+        while word_scale > 1.0 and len(words[index]["text"]) * word_scale > budget:
             word_scale -= 0.25
         scales[index] = max(1.0, word_scale)
     return scales
 
 
-def _build_phrase_layout_metadata(phrase, scales=None):
+def _build_phrase_layout_metadata(phrase, scales=None, max_chars=MAX_CHARS_PER_LINE):
     plain_words = [w["text"] for w in phrase][:MAX_WORDS_PER_PHRASE]
-    wrapped_lines = wrap_phrase_words(plain_words, weights=scales)
+    wrapped_lines = wrap_phrase_words(plain_words, weights=scales, max_chars=max_chars)
 
     line_ranges = []
     cursor = 0
@@ -645,7 +654,9 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
         preset = CAPTION_STYLE_PRESETS[DEFAULT_CAPTION_STYLE]
 
     scales = _word_scales(phrase, preset)
-    wrapped_lines, line_ranges = _build_phrase_layout_metadata(phrase, scales=scales)
+    wrapped_lines, line_ranges = _build_phrase_layout_metadata(
+        phrase, scales=scales, max_chars=preset["max_chars_per_line"],
+    )
     lines = []
 
     for start_idx, end_idx in line_ranges:
