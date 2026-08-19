@@ -31,6 +31,95 @@ SILENCE_GAP_BREAK_SEC = 0.8  # force phrase break on silence gaps >= this
 TARGET_CHARS_PER_LINE = 14   # was 16 — narrower lines, more readable on portrait
 MAX_CHARS_PER_LINE = 18      # was 22
 
+# ---------------------------------------------------------------------------
+# Caption styles
+# ---------------------------------------------------------------------------
+# "Arial Black" is not installed here — fontconfig silently substitutes
+# NotoSans-Regular and libass fakes the bold, so the classic style has never
+# rendered in the face it names.  The new styles ship an explicit font
+# directory instead.  Use the full family name with Bold=0: synthetically
+# emboldening a Black cut distorts it.
+BLACK_FONT_NAME = "Barlow Semi Condensed Black"
+BLACK_FONT_DIR = os.path.expanduser(
+    "~/.local/share/fonts/mc_thumbnails/barlow-semi-condensed"
+)
+
+CAPTION_STYLE_PRESETS = {
+    # Byte-identical to what the pipeline has always emitted.
+    "classic": {
+        "fontname": "Arial Black",
+        "fontsdir": None,
+        "bold": 1,
+        "border_style": 3,          # opaque box
+        "outline_colour": OUTLINE_COLOUR,
+        "back_colour": BOX_COLOUR,
+        "outline_ratio": 0.0035,
+        "shadow_ratio": 0.0012,
+        "uppercase": False,
+        "emphasis_scale": 1.0,
+        "active_ramp": False,
+        "solo_slow": False,
+    },
+    # Mixed typography, contour instead of a box: a box drawn per line steps
+    # visibly when the lines have different heights, which is exactly what
+    # mixed sizing produces.
+    "emphasis": {
+        "fontname": BLACK_FONT_NAME,
+        "fontsdir": BLACK_FONT_DIR,
+        "bold": 0,
+        "border_style": 1,
+        "outline_colour": "&H00000000",
+        "back_colour": "&H80000000",
+        "outline_ratio": 0.006,
+        "shadow_ratio": 0.003,
+        "uppercase": False,
+        "emphasis_scale": 1.5,
+        "active_ramp": True,
+        "solo_slow": False,
+    },
+    # Full social look: hard outline instead of a box, all caps, and single
+    # words popping in one at a time whenever the speaker slows down.
+    "impact": {
+        "fontname": BLACK_FONT_NAME,
+        "fontsdir": BLACK_FONT_DIR,
+        "bold": 0,
+        "border_style": 1,          # outline + shadow, no box
+        "outline_colour": "&H00000000",   # pure black contour
+        "back_colour": "&H80000000",      # soft drop shadow
+        "outline_ratio": 0.006,
+        "shadow_ratio": 0.003,
+        "uppercase": True,
+        "emphasis_scale": 1.5,
+        "active_ramp": True,
+        "solo_slow": True,
+    },
+}
+DEFAULT_CAPTION_STYLE = "classic"
+
+# Word-by-word mode: a phrase qualifies when the speaker is genuinely slow.
+SLOW_MEDIAN_ONSET_SEC = 0.48   # median word-to-word onset distance (<= ~2 words/s)
+SLOW_SOLO_WORD_SEC = 0.9       # a single word held this long carries an event alone
+SOLO_HOLD_SEC = 0.35           # solo words must not inherit HOLD_AFTER_PHRASE_SEC
+SOLO_POP_MS = 110              # scale-up duration of the pop-in
+
+# Emphasis fallback for every path without an LLM signal (raw ASR, captions
+# stage, --skip-llm-cleanup).  German function words never carry the accent.
+DE_STOPWORDS = {
+    "aber", "alle", "als", "also", "am", "an", "auch", "auf", "aus", "bei",
+    "bin", "bis", "bist", "da", "damit", "dann", "das", "dass", "dein", "dem",
+    "den", "denn", "der", "des", "dich", "die", "dir", "doch", "dort", "du",
+    "durch", "ein", "eine", "einem", "einen", "einer", "eines", "er", "es",
+    "euch", "euer", "für", "ganz", "gar", "gegen", "gewesen", "habe", "haben",
+    "hat", "hatte", "hier", "hin", "ich", "ihm", "ihn", "ihr", "im", "immer",
+    "in", "ist", "ja", "jetzt", "kann", "kein", "keine", "können", "mal",
+    "man", "mehr", "mein", "mich", "mir", "mit", "muss", "nach", "nein",
+    "nicht", "nichts", "noch", "nun", "nur", "ob", "oder", "ohne", "schon",
+    "sein", "seine", "sich", "sie", "sind", "so", "soll", "sondern", "über",
+    "um", "und", "uns", "unser", "unter", "vom", "von", "vor", "war", "waren",
+    "was", "weil", "weiter", "wenn", "wer", "werden", "wie", "wieder", "wir",
+    "wird", "wo", "wurde", "zu", "zum", "zur",
+}
+
 NVENC_FLAGS = [
     "-c:v",
     "h264_nvenc",
@@ -198,6 +287,90 @@ def segment_words_into_phrases(words):
     return _merge_short_phrases(phrases)
 
 
+def resolve_caption_style(style):
+    name = str(style or DEFAULT_CAPTION_STYLE).strip().lower()
+    return CAPTION_STYLE_PRESETS.get(name, CAPTION_STYLE_PRESETS[DEFAULT_CAPTION_STYLE])
+
+
+def safe_upper(text):
+    """Uppercase that keeps ``ß`` intact instead of expanding it to ``SS``."""
+    return "".join("ß" if ch == "ß" else ch.upper() for ch in text)
+
+
+def _emphasis_token(text):
+    return "".join(ch for ch in str(text or "").lower() if ch.isalnum())
+
+
+def _pick_emphasis_indices(phrase):
+    """Indices of the words rendered oversized in a phrase (at most two).
+
+    An explicit signal on the words wins — that is the LLM's pick, carried
+    through the cleanup cache.  Otherwise fall back to a heuristic so every
+    path (raw ASR, ``--skip-llm-cleanup``, the captions-only render stage)
+    still gets mixed typography rather than a flat line.
+    """
+    explicit = [i for i, w in enumerate(phrase) if w.get("emphasis")]
+    if explicit:
+        return set(explicit[:2])
+
+    candidates = []
+    for index, word in enumerate(phrase):
+        token = _emphasis_token(word.get("text"))
+        if len(token) < 4 or token in DE_STOPWORDS:
+            continue
+        # German capitalises nouns, which is exactly what should be shouted.
+        is_noun_like = str(word.get("text") or "")[:1].isupper()
+        # Ties go to the earlier word: the punch word tends to open the
+        # phrase, and a late accent reads as an afterthought.
+        candidates.append((len(token) + (3 if is_noun_like else 0), -index, index))
+
+    if not candidates:
+        return set()
+    return {max(candidates)[2]}
+
+
+def _median(values):
+    ordered = sorted(values)
+    if not ordered:
+        return 0.0
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2.0
+
+
+def _phrase_is_slow(phrase):
+    # Retimed words carry a distributed, not a measured, duration — reading a
+    # speaking rate off them would measure the retimer, not the speaker.
+    if any(w.get("synthetic") for w in phrase):
+        return False
+    if any((w["end"] - w["start"]) >= SLOW_SOLO_WORD_SEC for w in phrase):
+        return True
+    if len(phrase) < 2:
+        return False
+    onsets = [phrase[i + 1]["start"] - phrase[i]["start"] for i in range(len(phrase) - 1)]
+    return _median(onsets) >= SLOW_MEDIAN_ONSET_SEC
+
+
+def split_slow_phrases(phrases):
+    """Break slowly spoken phrases into one-word events.
+
+    A solo event has no neighbours, so scaling it cannot reflow anything —
+    that is what makes the pop-in animation safe where a per-word ``\\fs``
+    inside a multi-word line would shift the whole centred phrase.
+    """
+    result = []
+    for phrase in phrases:
+        if not phrase or not _phrase_is_slow(phrase):
+            result.append(phrase)
+            continue
+        for word in phrase:
+            solo = dict(word)
+            solo["solo"] = True
+            result.append([solo])
+    return result
+
+
 def _join_words(words):
     return " ".join(words).strip()
 
@@ -223,7 +396,21 @@ def _split_index_candidates(words):
     return candidates
 
 
-def wrap_phrase_words(phrase_words, max_lines=MAX_LINES_PER_CAPTION):
+def _weighted_len(words, weights, start, stop):
+    """Line length in *rendered* characters, not literal ones.
+
+    An oversized word occupies proportionally more of the line, so the
+    wrapper has to count it that way or a phrase with one 1.5× word
+    overflows the frame while scoring as comfortably short.
+    """
+    span = range(start, stop)
+    if not span:
+        return 0
+    total = sum(len(words[i]) * weights[i] for i in span)
+    return total + (len(span) - 1)
+
+
+def wrap_phrase_words(phrase_words, max_lines=MAX_LINES_PER_CAPTION, weights=None):
     words = [w for w in phrase_words if w]
     if not words:
         return [""]
@@ -233,9 +420,13 @@ def wrap_phrase_words(phrase_words, max_lines=MAX_LINES_PER_CAPTION):
     if len(words) > MAX_WORDS_PER_PHRASE:
         words = words[:MAX_WORDS_PER_PHRASE]
 
-    full_text = _join_words(words)
-    if len(full_text) <= MAX_CHARS_PER_LINE:
-        return [full_text]
+    if weights is None:
+        weights = [1.0] * len(words)
+    else:
+        weights = list(weights[:len(words)]) + [1.0] * max(0, len(words) - len(weights))
+
+    if _weighted_len(words, weights, 0, len(words)) <= MAX_CHARS_PER_LINE:
+        return [_join_words(words)]
 
     best = None
     best_score = float("inf")
@@ -247,8 +438,8 @@ def wrap_phrase_words(phrase_words, max_lines=MAX_LINES_PER_CAPTION):
         if not line1 or not line2:
             continue
 
-        len1 = len(line1)
-        len2 = len(line2)
+        len1 = _weighted_len(words, weights, 0, split_idx)
+        len2 = _weighted_len(words, weights, split_idx, len(words))
         longest = max(len1, len2)
         shortest = min(len1, len2)
 
@@ -262,6 +453,14 @@ def wrap_phrase_words(phrase_words, max_lines=MAX_LINES_PER_CAPTION):
 
         if shortest < 7:
             score += (7 - shortest) * 5
+
+        # An oversized word reads hardest when it shares a line with small
+        # ones, so prefer splits that give it a line of its own — but only
+        # when the other line still holds more than a single stranded word.
+        if len(words) >= 3 and any(weights[i] > 1.0 for i in range(split_idx)) != any(
+            weights[i] > 1.0 for i in range(split_idx, len(words))
+        ):
+            score -= 6
 
         score += bonus
 
@@ -379,9 +578,32 @@ def _drop_leading_partial_phrase(phrases, *, subtitle_start_time, transcriptions
     return phrases
 
 
-def _build_phrase_layout_metadata(phrase):
+def _word_scales(phrase, preset):
+    """Per-word size multipliers, constant for every event of the phrase.
+
+    Constant is the whole point: each word's Dialogue event re-renders the
+    entire phrase, so an override set that changed between events would
+    reflow the centred line and make the caption jitter word by word.
+    """
+    scale = float(preset.get("emphasis_scale", 1.0))
+    words = phrase[:MAX_WORDS_PER_PHRASE]
+    if scale <= 1.0:
+        return [1.0] * len(words)
+
+    scales = [1.0] * len(words)
+    for index in _pick_emphasis_indices(words):
+        word_scale = scale
+        # A long German compound at 1.5× overflows the frame on its own;
+        # step it down rather than shrink the whole caption.
+        while word_scale > 1.0 and len(words[index]["text"]) * word_scale > MAX_CHARS_PER_LINE:
+            word_scale -= 0.25
+        scales[index] = max(1.0, word_scale)
+    return scales
+
+
+def _build_phrase_layout_metadata(phrase, scales=None):
     plain_words = [w["text"] for w in phrase][:MAX_WORDS_PER_PHRASE]
-    wrapped_lines = wrap_phrase_words(plain_words)
+    wrapped_lines = wrap_phrase_words(plain_words, weights=scales)
 
     line_ranges = []
     cursor = 0
@@ -393,28 +615,68 @@ def _build_phrase_layout_metadata(phrase):
     return wrapped_lines, line_ranges
 
 
-def _colour_word(text, active=False):
-    escaped = _escape_ass_text(text)
+def _render_word(text, *, active, scale, base_font_size, preset):
+    escaped = _escape_ass_text(safe_upper(text) if preset["uppercase"] else text)
     colour = ACTIVE_COLOUR if active else INACTIVE_COLOUR
-    return f"{{\\c{colour}}}{escaped}"
+
+    if active and preset["active_ramp"]:
+        # Start on the inactive colour and animate into the highlight, so the
+        # word visibly ignites instead of cutting.  Colour-only animation
+        # cannot change glyph advances, so the line never moves while the
+        # highlight travels across it.
+        colour_tags = f"\\c{INACTIVE_COLOUR}\\t(0,90,\\c{ACTIVE_COLOUR})"
+    else:
+        colour_tags = f"\\c{colour}"
+
+    if scale > 1.0:
+        # Inline \fs, never \r: a style reset would also wipe the karaoke
+        # colour of the active word.
+        opening = f"\\fs{int(round(base_font_size * scale))}{colour_tags}"
+        closing = f"{{\\fs{base_font_size}}}"
+    else:
+        opening = colour_tags
+        closing = ""
+
+    return f"{{{opening}}}{escaped}{closing}"
 
 
-def _build_highlight_text_for_word(phrase, active_word_idx):
-    wrapped_lines, line_ranges = _build_phrase_layout_metadata(phrase)
+def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_font_size=100):
+    if preset is None:
+        preset = CAPTION_STYLE_PRESETS[DEFAULT_CAPTION_STYLE]
+
+    scales = _word_scales(phrase, preset)
+    wrapped_lines, line_ranges = _build_phrase_layout_metadata(phrase, scales=scales)
     lines = []
 
     for start_idx, end_idx in line_ranges:
         rendered_words = []
         for word_idx in range(start_idx, end_idx):
             rendered_words.append(
-                _colour_word(
+                _render_word(
                     phrase[word_idx]["text"],
                     active=(word_idx == active_word_idx),
+                    scale=scales[word_idx],
+                    base_font_size=base_font_size,
+                    preset=preset,
                 )
             )
         lines.append(" ".join(rendered_words))
 
     return r"\N".join(lines)
+
+
+def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_height, margin_v):
+    """One big word, centred, popping in — used when the speaker slows down."""
+    text = _escape_ass_text(safe_upper(word["text"]) if preset["uppercase"] else word["text"])
+    size = int(round(base_font_size * max(1.25, preset["emphasis_scale"])))
+    # \pos measures from the top, MarginV from the bottom — land the solo word
+    # on the same optical line the wrapped captions occupy.
+    pos_y = max(size, int(video_height - margin_v - size * 0.5))
+    colour = ACTIVE_COLOUR if word.get("emphasis") else INACTIVE_COLOUR
+    return (
+        f"{{\\an5\\pos({video_width // 2},{pos_y})\\fs{size}\\c{colour}"
+        f"\\fscx70\\fscy70\\t(0,{SOLO_POP_MS},\\fscx100\\fscy100)\\fad(40,0)}}{text}"
+    )
 
 
 def _normalise_phrase_timings(word_events):
@@ -443,21 +705,29 @@ def _normalise_phrase_timings(word_events):
 
         for j, w in enumerate(phrase):
             ws = max(w["start"], cursor)
+            # A solo word is its own phrase, so it would otherwise inherit the
+            # full inter-phrase hold and linger on screen long after it was
+            # spoken — which defeats the point of word-by-word pacing.
+            hold = SOLO_HOLD_SEC if w.get("solo") else HOLD_AFTER_PHRASE_SEC
 
             if j + 1 < n:
                 # Mid-phrase: use next word's start (no gap within phrase).
                 we = max(ws + 0.001, phrase[j + 1]["start"])
             elif i + 1 < total and word_events[i + 1]:
                 # Last word of phrase: hold briefly, but never overlap next phrase
-                natural = w["end"] + HOLD_AFTER_PHRASE_SEC
+                natural = w["end"] + hold
                 next_start = word_events[i + 1][0]["start"]
                 we = min(natural, next_start)
                 we = max(we, ws + 0.001)
             else:
                 # Very last word overall
-                we = max(ws + 0.001, w["end"] + HOLD_AFTER_PHRASE_SEC)
+                we = max(ws + 0.001, w["end"] + hold)
 
-            copied.append({"text": w["text"], "start": ws, "end": we})
+            carried = {"text": w["text"], "start": ws, "end": we}
+            for key in ("emphasis", "solo", "synthetic"):
+                if w.get(key):
+                    carried[key] = w[key]
+            copied.append(carried)
             cursor = we
 
         if copied:
@@ -466,7 +736,10 @@ def _normalise_phrase_timings(word_events):
     return normalised
 
 
-def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_events=None):
+def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_events=None,
+                    style=DEFAULT_CAPTION_STYLE):
+    preset = resolve_caption_style(style)
+
     # slightly smaller than before
     font_size = max(33, int(video_height * 0.053) - 2)
 
@@ -474,8 +747,8 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
     margin_v = max(500, int(video_height * 0.45))
     margin_h = max(70, int(video_width * 0.10))
 
-    outline = max(3, int(video_height * 0.0035))
-    shadow = max(1, int(video_height * 0.0012))
+    outline = max(3, int(video_height * preset["outline_ratio"]))
+    shadow = max(1, int(video_height * preset["shadow_ratio"]))
 
     lines = [
         "[Script Info]",
@@ -493,10 +766,10 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
             "Alignment, MarginL, MarginR, MarginV, Encoding"
         ),
         (
-            f"Style: Default,Arial Black,"
+            f"Style: Default,{preset['fontname']},"
             f"{font_size},{INACTIVE_COLOUR},{INACTIVE_COLOUR},"
-            f"{OUTLINE_COLOUR},{BOX_COLOUR},"
-            f"1,0,0,0,100,100,0,0,3,{outline},{shadow},2,"
+            f"{preset['outline_colour']},{preset['back_colour']},"
+            f"{preset['bold']},0,0,0,100,100,0,0,{preset['border_style']},{outline},{shadow},2,"
             f"{margin_h},{margin_h},{margin_v},1"
         ),
         "",
@@ -505,6 +778,8 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
     ]
 
     if word_events:
+        if preset["solo_slow"]:
+            word_events = split_slow_phrases(word_events)
         word_events = _normalise_phrase_timings(word_events)
 
         for phrase in word_events:
@@ -518,15 +793,28 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
                 if event_end <= event_start:
                     event_end = event_start + 0.03
 
-                highlight_text = _build_highlight_text_for_word(phrase, word_idx)
-                # Fade-in only when the phrase first appears (first word)
-                prefix = r"{\fad(100,0)}" if word_idx == 0 else ""
+                if word.get("solo"):
+                    event_text = _build_solo_word_text(
+                        word,
+                        base_font_size=font_size,
+                        preset=preset,
+                        video_width=video_width,
+                        video_height=video_height,
+                        margin_v=margin_v,
+                    )
+                else:
+                    highlight_text = _build_highlight_text_for_word(
+                        phrase, word_idx, preset=preset, base_font_size=font_size,
+                    )
+                    # Fade-in only when the phrase first appears (first word)
+                    prefix = r"{\fad(100,0)}" if word_idx == 0 else ""
+                    event_text = f"{prefix}{highlight_text}"
 
                 lines.append(
                     "Dialogue: 0,"
                     f"{_seconds_to_ass_time(event_start)},"
                     f"{_seconds_to_ass_time(event_end)},"
-                    f"Default,,0,0,0,,{prefix}{highlight_text}"
+                    f"Default,,0,0,0,,{event_text}"
                 )
     else:
         for text, start, end in chunks:
@@ -584,7 +872,11 @@ def _build_word_events(
 
         text = (w["text"] or "").strip()
         if text and not text.startswith("["):
-            adjusted.append({"text": text, "start": start, "end": end})
+            entry = {"text": text, "start": start, "end": end}
+            for key in ("emphasis", "synthetic"):
+                if w.get(key):
+                    entry[key] = w[key]
+            adjusted.append(entry)
         elif text:
             dropped += 1
 
@@ -616,7 +908,8 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
                            video_start_time=0, word_timestamps=None,
                            trim_leading_partial_phrase=False,
                            highlight_start_time=None,
-                           extra_vf=""):
+                           extra_vf="",
+                           caption_style=DEFAULT_CAPTION_STYLE):
     input_video = os.path.abspath(input_video)
     output_video = os.path.abspath(output_video)
 
@@ -682,13 +975,20 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
             video_height,
             chunked,
             word_events=word_events,
+            style=caption_style,
         )
 
+        preset = resolve_caption_style(caption_style)
         n_events = len(word_events) if word_events else len(chunked)
         mode = "phrase highlight" if word_events else "chunked"
-        print(f"Adding {n_events} subtitle events ({mode}) to video with FFmpeg NVENC...")
+        print(f"Adding {n_events} subtitle events ({mode}, style: {caption_style}) "
+              "to video with FFmpeg NVENC...")
 
         vf_chain = f"subtitles={os.path.basename(subtitle_path)}"
+        # Without an explicit directory libass resolves the family through
+        # fontconfig and silently substitutes whatever is closest.
+        if preset["fontsdir"] and os.path.isdir(preset["fontsdir"]):
+            vf_chain += f":fontsdir={preset['fontsdir']}"
         if extra_vf:
             vf_chain = f"{vf_chain},{extra_vf}"
 

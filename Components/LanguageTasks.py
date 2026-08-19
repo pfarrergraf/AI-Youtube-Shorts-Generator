@@ -652,10 +652,22 @@ PRIMARY RULE — FAITHFULNESS ABOVE ALL:
 IF UNCERTAIN:
   Return the segment text UNCHANGED. Err strongly on the side of keeping the original.
 
+==== EMPHASIS ====
+
+For every segment also name the word the speaker is driving at — the one a
+listener would remember, and that a caption should shout. Rules:
+
+- 0 to 2 words per segment, fewer is better. Return [] when nothing stands out.
+- Each word must appear VERBATIM in that segment's text (same spelling, no
+  punctuation, no inflection changes). A word that is not in the text is
+  discarded.
+- Never pick function words (und, der, die, das, ist, nicht, aber, ich, du, …).
+- Prefer the noun or verb carrying the claim over an adjective decorating it.
+
 Return ONLY JSON (no markdown, no comments):
 [
-  {"index": 0, "text": "Corrected text or original text"},
-  {"index": 1, "text": "Corrected text or original text"}
+  {"index": 0, "text": "Corrected text or original text", "emphasis": ["Wort"]},
+  {"index": 1, "text": "Corrected text or original text", "emphasis": []}
 ]
 """
 
@@ -770,6 +782,27 @@ def _parse_cleanup_response(text):
     return []
 
 
+def _validated_emphasis(raw, segment_text: str) -> list[str]:
+    """Keep only emphasis picks that really occur in the segment.
+
+    The model occasionally returns an inflected or invented form; a word the
+    caption renderer cannot find would silently produce no emphasis at all,
+    so drop it here and let the heuristic take over instead.
+    """
+    if not isinstance(raw, list):
+        return []
+    present = {
+        "".join(ch for ch in token.lower() if ch.isalnum())
+        for token in str(segment_text).split()
+    }
+    picked: list[str] = []
+    for candidate in raw[:2]:
+        token = "".join(ch for ch in str(candidate).lower() if ch.isalnum())
+        if token and token in present and token not in picked:
+            picked.append(token)
+    return picked
+
+
 def CleanTranscriptSegments(
     transcriptions,
     language="de",
@@ -778,6 +811,7 @@ def CleanTranscriptSegments(
     protected_terms=None,
     prompt_hints=None,
     speaker_profile_text=None,
+    collect_emphasis=False,
 ):
     """Conservatively clean segment text for subtitle rendering.
 
@@ -792,9 +826,10 @@ def CleanTranscriptSegments(
         return []
 
     cleaned = [[str(text), float(start), float(end)] for text, start, end in transcriptions]
+    emphasis_map: dict[int, list[str]] = {}
     chunks = _chunk_segments_for_cleanup(cleaned)
     if not chunks:
-        return cleaned
+        return (cleaned, emphasis_map) if collect_emphasis else cleaned
 
     print(f"Cleaning transcript text in {len(chunks)} chunk(s)...")
     updated = 0
@@ -872,6 +907,11 @@ def CleanTranscriptSegments(
                 updated += 1
                 applied += 1
 
+            if collect_emphasis:
+                picked = _validated_emphasis(item.get("emphasis"), cleaned[idx][0])
+                if picked:
+                    emphasis_map[idx] = picked
+
         print(f"  [Cleanup] Chunk {chunk_idx}/{len(chunks)} updated {applied} segment(s).")
 
     print(f"[Cleanup] Updated {updated} segment(s) total.")
@@ -884,6 +924,9 @@ def CleanTranscriptSegments(
                 print(f"[Cleanup] Rejected rewrites logged to: {rejected_log_path}")
             except Exception as exc:
                 print(f"[Cleanup] Could not write rejected log: {exc}")
+    if collect_emphasis:
+        print(f"[Cleanup] Marked emphasis words in {len(emphasis_map)} segment(s).")
+        return cleaned, emphasis_map
     return cleaned
 
 
