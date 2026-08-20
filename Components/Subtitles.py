@@ -106,12 +106,28 @@ CAPTION_STYLE_PRESETS = {
     },
 }
 DEFAULT_CAPTION_STYLE = "classic"
+# Pop modifiers combine with any style: "none" leaves the style untouched,
+# "balloon" makes appearing words inflate and rise from half to full opacity.
+CAPTION_POPS = ("none", "balloon")
+DEFAULT_CAPTION_POP = "none"
 
 # Word-by-word mode: a phrase qualifies when the speaker is genuinely slow.
 SLOW_MEDIAN_ONSET_SEC = 0.48   # median word-to-word onset distance (<= ~2 words/s)
 SLOW_SOLO_WORD_SEC = 0.9       # a single word held this long carries an event alone
 SOLO_HOLD_SEC = 0.35           # solo words must not inherit HOLD_AFTER_PHRASE_SEC
 SOLO_POP_MS = 110              # scale-up duration of the pop-in
+
+# Balloon pop: an independent modifier that combines with every caption style.
+# The word inflates fast, overshoots slightly and settles — the overshoot is
+# what makes it read as a balloon rather than a plain zoom — while its opacity
+# rises from half to full.
+BALLOON_START_SCALE = 58        # % of final size at the start of the inflate
+BALLOON_OVERSHOOT_SCALE = 107   # % at the peak, before settling back to 100
+BALLOON_INFLATE_MS = 105        # start → overshoot
+BALLOON_SETTLE_MS = 85          # overshoot → final size
+BALLOON_START_ALPHA = "&H80&"   # 50% transparent
+BALLOON_FULL_ALPHA = "&H00&"    # fully opaque
+BALLOON_FADE_MS = 130           # duration of the opacity rise
 
 # Emphasis fallback for every path without an LLM signal (raw ASR, captions
 # stage, --skip-llm-cleanup).  German function words never carry the accent.
@@ -693,7 +709,7 @@ def _build_phrase_layout_metadata(phrase, scales=None, max_chars=MAX_CHARS_PER_L
     return wrapped_lines, line_ranges
 
 
-def _render_word(text, *, active, scale, base_font_size, preset):
+def _render_word(text, *, active, scale, base_font_size, preset, balloon=False):
     escaped = _escape_ass_text(safe_upper(text) if preset["uppercase"] else text)
     colour = ACTIVE_COLOUR if active else INACTIVE_COLOUR
 
@@ -705,6 +721,12 @@ def _render_word(text, *, active, scale, base_font_size, preset):
         colour_tags = f"\\c{INACTIVE_COLOUR}\\t(0,90,\\c{ACTIVE_COLOUR})"
     else:
         colour_tags = f"\\c{colour}"
+
+    if active and balloon:
+        # Only the opacity half of the balloon can run here: the word shares
+        # its line with the rest of the phrase, so scaling it would push the
+        # others sideways. The inflate rides on the phrase entrance instead.
+        colour_tags += _balloon_alpha_tags()
 
     if scale > 1.0:
         # Inline \fs, never \r: a style reset would also wipe the karaoke
@@ -718,8 +740,29 @@ def _render_word(text, *, active, scale, base_font_size, preset):
     return f"{{{opening}}}{escaped}{closing}"
 
 
+def _balloon_scale_tags():
+    """Inflate-with-overshoot, safe only where nothing shares the event.
+
+    Scaling changes glyph advances, so this may only be applied to an event
+    that carries a single word or the whole caption at once — never to one
+    word inside a shared line, which would reflow the others.
+    """
+    return (
+        f"\\fscx{BALLOON_START_SCALE}\\fscy{BALLOON_START_SCALE}"
+        f"\\t(0,{BALLOON_INFLATE_MS},\\fscx{BALLOON_OVERSHOOT_SCALE}\\fscy{BALLOON_OVERSHOOT_SCALE})"
+        f"\\t({BALLOON_INFLATE_MS},{BALLOON_INFLATE_MS + BALLOON_SETTLE_MS},\\fscx100\\fscy100)"
+    )
+
+
+def _balloon_alpha_tags():
+    return (
+        f"\\alpha{BALLOON_START_ALPHA}"
+        f"\\t(0,{BALLOON_FADE_MS},\\alpha{BALLOON_FULL_ALPHA})"
+    )
+
+
 def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_font_size=100,
-                                   max_chars=None):
+                                   max_chars=None, balloon=False):
     if preset is None:
         preset = CAPTION_STYLE_PRESETS[DEFAULT_CAPTION_STYLE]
     if max_chars is None:
@@ -741,6 +784,7 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
                     scale=scales[word_idx],
                     base_font_size=base_font_size,
                     preset=preset,
+                    balloon=balloon,
                 )
             )
         lines.append(" ".join(rendered_words))
@@ -749,7 +793,7 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
 
 
 def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_height, margin_v,
-                          max_chars=None):
+                          max_chars=None, balloon=False):
     """One big word, centred, popping in — used when the speaker slows down."""
     text = _escape_ass_text(safe_upper(word["text"]) if preset["uppercase"] else word["text"])
     size = int(round(base_font_size * max(1.25, preset["emphasis_scale"])))
@@ -763,9 +807,13 @@ def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_he
     # on the same optical line the wrapped captions occupy.
     pos_y = max(size, int(video_height - margin_v - size * 0.5))
     colour = ACTIVE_COLOUR if word.get("emphasis") else INACTIVE_COLOUR
+    if balloon:
+        # A solo event stands alone, so the full balloon is safe here.
+        motion = _balloon_scale_tags() + _balloon_alpha_tags()
+    else:
+        motion = f"\\fscx70\\fscy70\\t(0,{SOLO_POP_MS},\\fscx100\\fscy100)\\fad(40,0)"
     return (
-        f"{{\\an5\\pos({video_width // 2},{pos_y})\\fs{size}\\c{colour}"
-        f"\\fscx70\\fscy70\\t(0,{SOLO_POP_MS},\\fscx100\\fscy100)\\fad(40,0)}}{text}"
+        f"{{\\an5\\pos({video_width // 2},{pos_y})\\fs{size}\\c{colour}{motion}}}{text}"
     )
 
 
@@ -827,8 +875,9 @@ def _normalise_phrase_timings(word_events):
 
 
 def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_events=None,
-                    style=DEFAULT_CAPTION_STYLE):
+                    style=DEFAULT_CAPTION_STYLE, pop=DEFAULT_CAPTION_POP):
     preset = resolve_caption_style(style)
+    balloon = str(pop or "").lower() == "balloon"
 
     # slightly smaller than before
     font_size = max(33, int(video_height * preset["font_ratio"]) - 2)
@@ -903,14 +952,24 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
                         video_height=video_height,
                         margin_v=margin_v,
                         max_chars=max_chars,
+                        balloon=balloon,
                     )
                 else:
                     highlight_text = _build_highlight_text_for_word(
                         phrase, word_idx, preset=preset, base_font_size=font_size,
-                        max_chars=max_chars,
+                        max_chars=max_chars, balloon=balloon,
                     )
-                    # Fade-in only when the phrase first appears (first word)
-                    prefix = r"{\fad(100,0)}" if word_idx == 0 else ""
+                    if word_idx == 0 and balloon:
+                        # The whole caption inflates as it appears. Scaling the
+                        # entire event is reflow-free by definition — every word
+                        # grows together, so nothing shifts relative to anything
+                        # else, and libass keeps re-centring it while it grows.
+                        prefix = "{" + _balloon_scale_tags() + "}"
+                    elif word_idx == 0:
+                        # Fade-in only when the phrase first appears (first word)
+                        prefix = r"{\fad(100,0)}"
+                    else:
+                        prefix = ""
                     event_text = f"{prefix}{highlight_text}"
 
                 lines.append(
@@ -1012,7 +1071,8 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
                            trim_leading_partial_phrase=False,
                            highlight_start_time=None,
                            extra_vf="",
-                           caption_style=DEFAULT_CAPTION_STYLE):
+                           caption_style=DEFAULT_CAPTION_STYLE,
+                           caption_pop=DEFAULT_CAPTION_POP):
     input_video = os.path.abspath(input_video)
     output_video = os.path.abspath(output_video)
 
@@ -1079,12 +1139,14 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
             chunked,
             word_events=word_events,
             style=caption_style,
+            pop=caption_pop,
         )
 
         preset = resolve_caption_style(caption_style)
         n_events = len(word_events) if word_events else len(chunked)
         mode = "phrase highlight" if word_events else "chunked"
-        print(f"Adding {n_events} subtitle events ({mode}, style: {caption_style}) "
+        pop_note = f", pop: {caption_pop}" if str(caption_pop or "none").lower() != "none" else ""
+        print(f"Adding {n_events} subtitle events ({mode}, style: {caption_style}{pop_note}) "
               "to video with FFmpeg NVENC...")
 
         vf_chain = f"subtitles={os.path.basename(subtitle_path)}"
