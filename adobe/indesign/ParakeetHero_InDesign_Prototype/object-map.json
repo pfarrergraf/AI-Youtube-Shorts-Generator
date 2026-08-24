@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "documents": {
+    "vertical_9x16": "output_final/ParakeetHero_9x16.indd",
+    "youtube_16x9": "output_final/ParakeetHero_16x9.indd"
+  },
+  "objects": {
+    "background.vector": {"layer": "00_BACKGROUND", "type": "linked_svg"},
+    "atmosphere.vector": {"layer": "10_ATMOSPHERE", "type": "linked_svg"},
+    "hero.leo_bigger": {"layer": "20_HERO", "type": "linked_png"},
+    "surface.headline": {"layer": "30_TEXT_SURFACE", "type": "rectangle"},
+    "accent.gold": {"layer": "30_TEXT_SURFACE", "type": "rectangle"},
+    "headline.wunder": {"layer": "40_HEADLINE", "type": "live_text"},
+    "headline.sind_nicht": {"layer": "40_HEADLINE", "type": "live_text"},
+    "headline.vorbei": {"layer": "40_HEADLINE", "type": "live_text"},
+    "brand.icf_zuerich": {"layer": "50_BRAND_METADATA", "type": "live_text"},
+    "speaker.leo_bigger": {"layer": "50_BRAND_METADATA", "type": "live_text"},
+    "badge.parakeet_hero": {"layer": "50_BRAND_METADATA", "type": "live_text"}
+  }
+}

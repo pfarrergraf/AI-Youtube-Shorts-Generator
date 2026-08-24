@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "project": "ParakeetHero_InDesign_Prototype",
+  "purpose": "Cross-format proof of the Parakeet hero thumbnail workflow in Adobe InDesign",
+  "content": {
+    "brand": "ICF ZÜRICH",
+    "speaker": "LEO BIGGER",
+    "headline_lines": ["WUNDER", "SIND NICHT", "VORBEI"],
+    "badge": "PARAKEET HERO"
+  },
+  "formats": [
+    {
+      "id": "vertical_9x16",
+      "width_px": 1080,
+      "height_px": 1920,
+      "resolution_ppi": 72,
+      "output": "ParakeetHero_9x16"
+    },
+    {
+      "id": "youtube_16x9",
+      "width_px": 1280,
+      "height_px": 720,
+      "resolution_ppi": 72,
+      "output": "ParakeetHero_16x9"
+    }
+  ],
+  "layers_bottom_to_top": [
+    "00_BACKGROUND",
+    "10_ATMOSPHERE",
+    "20_HERO",
+    "30_TEXT_SURFACE",
+    "40_HEADLINE",
+    "50_BRAND_METADATA"
+  ],
+  "linked_assets": {
+    "hero": "assets/images/leo_bigger_icf_ai_astonished_revelation_v1.png",
+    "background_9x16": "assets/vectors/background_9x16.svg",
+    "background_16x9": "assets/vectors/background_16x9.svg",
+    "atmosphere_9x16": "assets/vectors/atmosphere_9x16.svg",
+    "atmosphere_16x9": "assets/vectors/atmosphere_16x9.svg"
+  },
+  "typography": {
+    "headline_family": "Montserrat",
+    "headline_style": "Black",
+    "metadata_family": "Montserrat",
+    "metadata_style": "SemiBold",
+    "fallback_family": "Arial"
+  },
+  "colors_rgb": {
+    "ink": [4, 11, 18],
+    "white": [247, 250, 252],
+    "gold": [255, 193, 59],
+    "cyan": [38, 218, 229],
+    "muted": [173, 190, 199]
+  },
+  "assumptions": [
+    "Digital-only output without bleed",
+    "Page-point dimensions equal target pixels at 72 ppi",
+    "Only approved, text-free speaker repertoire imagery is used",
+    "Headline and branding remain live text in InDesign"
+  ]
+}
