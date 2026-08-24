@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "social_vertical": {
+      "reference_canvas": {"width": 1080, "height": 1920},
+      "source": "Effects-files/instagram_reel_margin.png",
+      "interior_padding_px": 24,
+      "caption_anchor": {"x": 462, "y": 1160},
+      "max_base_caption_width": 630,
+      "notes": "Anchor and width stay inside the lower Instagram-safe region even at Balloon's 124% peak, including outline and blur allowance."
+    }
+  }
+}

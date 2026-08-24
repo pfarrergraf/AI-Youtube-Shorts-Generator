@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -171,6 +172,70 @@ BALLOON_MOTION_PROFILES = {
 # 38% keeps them below the previous 45%-from-bottom placement without entering
 # the platform UI / lower-third danger zone.
 CAPTION_MARGIN_BOTTOM_RATIO = 0.38
+
+# The Instagram guide is deliberately represented as a small, versioned
+# profile instead of scattering magic coordinates throughout the renderer.
+# ``social_vertical`` is the production default; ``off`` preserves the legacy
+# centred placement for forensic comparisons only.
+DEFAULT_CAPTION_SAFE_AREA = "social_vertical"
+CAPTION_SAFE_AREA_OFF = "off"
+_CAPTION_SAFE_AREAS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "caption_safe_areas.json"
+)
+
+
+def _load_caption_safe_area_profiles():
+    with open(_CAPTION_SAFE_AREAS_PATH, encoding="utf-8") as handle:
+        payload = json.load(handle)
+    profiles = payload.get("profiles") or {}
+    if not isinstance(profiles, dict) or not profiles:
+        raise RuntimeError("caption_safe_areas.json has no profiles")
+    return profiles
+
+
+def resolve_caption_safe_area(name=DEFAULT_CAPTION_SAFE_AREA):
+    """Resolve a versioned caption-safe-area profile, or the legacy ``off`` mode."""
+    selected = str(name or DEFAULT_CAPTION_SAFE_AREA).strip().lower()
+    if selected == CAPTION_SAFE_AREA_OFF:
+        return None
+    profiles = _load_caption_safe_area_profiles()
+    if selected not in profiles:
+        choices = ", ".join((CAPTION_SAFE_AREA_OFF, *sorted(profiles)))
+        raise ValueError(f"Unsupported caption safe area: {selected} (choose {choices})")
+    return profiles[selected]
+
+
+def _caption_layout(video_width, video_height, safe_area=DEFAULT_CAPTION_SAFE_AREA):
+    """Return a stable ASS anchor and conservative wrapping width.
+
+    The profile's base width deliberately leaves enough room for the 124 %
+    Balloon peak, outline, and blur. A fixed ``\\pos`` anchor also means that
+    karaoke events cannot drift as their highlighted word changes.
+    """
+    profile = resolve_caption_safe_area(safe_area)
+    margin_v = max(420, int(video_height * CAPTION_MARGIN_BOTTOM_RATIO))
+    margin_h = max(70, int(video_width * 0.10))
+    if profile is None:
+        return {
+            "anchor_x": video_width // 2,
+            "anchor_y": video_height - margin_v,
+            "usable_width": video_width - 2 * margin_h,
+            "margin_v": margin_v,
+            "margin_h": margin_h,
+            "enabled": False,
+        }
+
+    canvas = profile["reference_canvas"]
+    scale_x = video_width / float(canvas["width"])
+    scale_y = video_height / float(canvas["height"])
+    return {
+        "anchor_x": int(round(profile["caption_anchor"]["x"] * scale_x)),
+        "anchor_y": int(round(profile["caption_anchor"]["y"] * scale_y)),
+        "usable_width": int(round(profile["max_base_caption_width"] * scale_x)),
+        "margin_v": margin_v,
+        "margin_h": margin_h,
+        "enabled": True,
+    }
 
 # Emphasis fallback for every path without an LLM signal (raw ASR, captions
 # stage, --skip-llm-cleanup).  German function words never carry the accent.
@@ -884,7 +949,7 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
 
 
 def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_height, margin_v,
-                          max_chars=None, balloon_level=None):
+                          max_chars=None, balloon_level=None, anchor_x=None, anchor_y=None):
     """One big word, centred, popping in — used when the speaker slows down."""
     text = _escape_ass_text(safe_upper(word["text"]) if preset["uppercase"] else word["text"])
     size = int(round(base_font_size * max(1.25, preset["emphasis_scale"])))
@@ -896,7 +961,9 @@ def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_he
         size = max(base_font_size, int(size * budget / length))
     # \pos measures from the top, MarginV from the bottom — land the solo word
     # on the same optical line the wrapped captions occupy.
-    pos_y = max(size, int(video_height - margin_v - size * 0.5))
+    pos_x = int(anchor_x if anchor_x is not None else video_width // 2)
+    baseline_y = int(anchor_y if anchor_y is not None else video_height - margin_v)
+    pos_y = max(size, int(baseline_y - size * 0.5))
     colour = ACTIVE_COLOUR if word.get("emphasis") else INACTIVE_COLOUR
     if balloon_level:
         # A solo event stands alone, so the full balloon is safe here.
@@ -904,7 +971,7 @@ def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_he
     else:
         motion = f"\\fscx70\\fscy70\\t(0,{SOLO_POP_MS},\\fscx100\\fscy100)\\fad(40,0)"
     return (
-        f"{{\\an5\\pos({video_width // 2},{pos_y})\\fs{size}\\c{colour}{motion}}}{text}"
+        f"{{\\an5\\pos({pos_x},{pos_y})\\fs{size}\\c{colour}{motion}}}{text}"
     )
 
 
@@ -988,7 +1055,8 @@ def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0):
 
 
 def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_events=None,
-                    style=DEFAULT_CAPTION_STYLE, pop=DEFAULT_CAPTION_POP, caption_cutoff=None):
+                    style=DEFAULT_CAPTION_STYLE, pop=DEFAULT_CAPTION_POP, caption_cutoff=None,
+                    caption_safe_area=DEFAULT_CAPTION_SAFE_AREA):
     preset = resolve_caption_style(style)
     balloon = str(pop or "").lower() == "balloon"
 
@@ -997,11 +1065,12 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
 
     # Audience feedback preferred the captions lower than the previous 45%
     # placement, while still leaving room for platform controls.
-    margin_v = max(420, int(video_height * CAPTION_MARGIN_BOTTOM_RATIO))
-    margin_h = max(70, int(video_width * 0.10))
+    layout = _caption_layout(video_width, video_height, caption_safe_area)
+    margin_v = layout["margin_v"]
+    margin_h = layout["margin_h"]
 
     max_chars = _measured_char_budget(
-        preset, font_size, video_width - 2 * max(70, int(video_width * 0.10)),
+        preset, font_size, layout["usable_width"],
         preset["max_chars_per_line"],
     )
 
@@ -1077,6 +1146,8 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
                         video_width=video_width,
                         video_height=video_height,
                         margin_v=margin_v,
+                        anchor_x=layout["anchor_x"],
+                        anchor_y=layout["anchor_y"],
                         max_chars=max_chars,
                         balloon_level=phrase_balloon_level,
                     )
@@ -1085,6 +1156,7 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
                         phrase, word_idx, preset=preset, base_font_size=font_size,
                         max_chars=max_chars, balloon_level=phrase_balloon_level,
                     )
+                    position = f"\\an2\\pos({layout['anchor_x']},{layout['anchor_y']})"
                     if phrase_balloon_level:
                         # Every new word is its own arrival, not just the
                         # phrase's first: scaling the whole event is
@@ -1094,12 +1166,12 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
                         # it grows. That growth is also what makes a new word
                         # visibly shove the existing ones aside — the effect
                         # is intentional, not a bug.
-                        prefix = "{" + _balloon_scale_tags(phrase_balloon_level) + "}"
+                        prefix = "{" + position + _balloon_scale_tags(phrase_balloon_level) + "}"
                     elif word_idx == 0:
                         # Fade-in only when the phrase first appears (first word)
-                        prefix = r"{\fad(100,0)}"
+                        prefix = "{" + position + r"\fad(100,0)}"
                     else:
-                        prefix = ""
+                        prefix = "{" + position + "}"
                     event_text = f"{prefix}{highlight_text}"
 
                 lines.append(
@@ -1113,7 +1185,7 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
             safe_text = _escape_ass_text(text.strip())
             if not safe_text:
                 continue
-            fade = r"{\fad(80,40)}"
+            fade = "{" + f"\\an2\\pos({layout['anchor_x']},{layout['anchor_y']})" + r"\fad(80,40)}"
             lines.append(
                 "Dialogue: 0,"
                 f"{_seconds_to_ass_time(start)},"
@@ -1219,7 +1291,8 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
                            caption_cutoff=None,
                            extra_vf="",
                            caption_style=DEFAULT_CAPTION_STYLE,
-                           caption_pop=DEFAULT_CAPTION_POP):
+                           caption_pop=DEFAULT_CAPTION_POP,
+                           caption_safe_area=DEFAULT_CAPTION_SAFE_AREA):
     input_video = os.path.abspath(input_video)
     output_video = os.path.abspath(output_video)
 
@@ -1289,6 +1362,7 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
             style=caption_style,
             pop=caption_pop,
             caption_cutoff=caption_cutoff,
+            caption_safe_area=caption_safe_area,
         )
 
         preset = resolve_caption_style(caption_style)
