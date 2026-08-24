@@ -120,16 +120,17 @@ SOLO_HOLD_SEC = 0.35           # solo words must not inherit HOLD_AFTER_PHRASE_S
 SOLO_POP_MS = 110              # scale-up duration of the pop-in
 
 # Balloon pop: an independent modifier that combines with every caption style.
-# The word inflates fast, overshoots slightly and settles — the overshoot is
-# what makes it read as a balloon rather than a plain zoom — while its opacity
-# rises from half to full.
-BALLOON_START_SCALE = 58        # % of final size at the start of the inflate
-BALLOON_OVERSHOOT_SCALE = 107   # % at the peak, before settling back to 100
-BALLOON_INFLATE_MS = 105        # start → overshoot
-BALLOON_SETTLE_MS = 85          # overshoot → final size
-BALLOON_START_ALPHA = "&H80&"   # 50% transparent
+# This is intentionally a visible motion preset, not a barely perceptible
+# easing. The whole event inflates from a small, blurred silhouette, overshoots
+# clearly, then settles; the spoken word itself fades in separately.
+BALLOON_START_SCALE = 38        # % of final size at the start of the inflate
+BALLOON_OVERSHOOT_SCALE = 124   # % at the peak, before settling back to 100
+BALLOON_INFLATE_MS = 145        # start → overshoot
+BALLOON_SETTLE_MS = 115         # overshoot → final size
+BALLOON_START_ALPHA = "&HFF&"   # fully transparent at the start
 BALLOON_FULL_ALPHA = "&H00&"    # fully opaque
-BALLOON_FADE_MS = 130           # duration of the opacity rise
+BALLOON_FADE_MS = 180           # duration of the opacity rise
+BALLOON_START_BLUR = 7          # resolves with the spoken-word reveal
 # A word popping in before it is spoken needs the inflate+settle to be done
 # by the time the voice hits — that natural lead-in is exactly the pop's own
 # duration.
@@ -790,7 +791,9 @@ def _balloon_scale_tags():
     """
     return (
         f"\\fscx{BALLOON_START_SCALE}\\fscy{BALLOON_START_SCALE}"
+        f"\\blur{BALLOON_START_BLUR}"
         f"\\t(0,{BALLOON_INFLATE_MS},\\fscx{BALLOON_OVERSHOOT_SCALE}\\fscy{BALLOON_OVERSHOOT_SCALE})"
+        f"\\t(0,{BALLOON_FADE_MS},\\blur0)"
         f"\\t({BALLOON_INFLATE_MS},{BALLOON_INFLATE_MS + BALLOON_SETTLE_MS},\\fscx100\\fscy100)"
     )
 
