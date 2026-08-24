@@ -138,10 +138,34 @@ BALLOON_LEAD_IN_SEC = (BALLOON_INFLATE_MS + BALLOON_SETTLE_MS) / 1000.0
 # The balloon deliberately dominates far more than the shared 1.5x emphasis
 # scale — the punch word is meant to shove its neighbours aside.
 BALLOON_EMPHASIS_SCALE = 2.2
-# Balloon motion is readable only in genuinely slow delivery. WPM is measured
-# from the phrase's real word timestamps; synthetic/retimed timings never
+# The medium tier makes ``emphasis + balloon`` visibly distinct at ordinary
+# sermon pacing without turning every phrase into motion graphics. WPM is
+# always measured from real ASR anchors; synthetic/retimed timings never
 # qualify because they describe the retimer rather than the speaker.
 BALLOON_MAX_WPM = 90.0
+BALLOON_MEDIUM_MAX_WPM = 150.0
+BALLOON_MOTION_PROFILES = {
+    "strong": {
+        "start_scale": BALLOON_START_SCALE,
+        "overshoot_scale": BALLOON_OVERSHOOT_SCALE,
+        "inflate_ms": BALLOON_INFLATE_MS,
+        "settle_ms": BALLOON_SETTLE_MS,
+        "start_alpha": BALLOON_START_ALPHA,
+        "fade_ms": BALLOON_FADE_MS,
+        "start_blur": BALLOON_START_BLUR,
+        "emphasis_scale": BALLOON_EMPHASIS_SCALE,
+    },
+    "medium": {
+        "start_scale": 64,
+        "overshoot_scale": 112,
+        "inflate_ms": 120,
+        "settle_ms": 95,
+        "start_alpha": "&HD0&",
+        "fade_ms": 150,
+        "start_blur": 3,
+        "emphasis_scale": 1.8,
+    },
+}
 
 # Bottom-aligned ASS captions move downward when MarginV becomes smaller.
 # 38% keeps them below the previous 45%-from-bottom placement without entering
@@ -449,9 +473,16 @@ def _phrase_wpm(phrase):
 
 def _mark_balloon_eligibility(phrases):
     for phrase in phrases:
-        eligible = _phrase_wpm(phrase) < BALLOON_MAX_WPM
+        wpm = _phrase_wpm(phrase)
+        level = None
+        if wpm < BALLOON_MAX_WPM:
+            level = "strong"
+        elif wpm < BALLOON_MEDIUM_MAX_WPM:
+            level = "medium"
         for word in phrase:
-            word["balloon_eligible"] = eligible
+            word["balloon_eligible"] = level is not None
+            if level is not None:
+                word["balloon_level"] = level
     return phrases
 
 
@@ -501,6 +532,7 @@ def split_slow_phrases(phrases):
                 solo["emphasis"] = True
             if all(w.get("balloon_eligible") for w in unit):
                 solo["balloon_eligible"] = True
+                solo["balloon_level"] = unit[0].get("balloon_level", "strong")
             result.append([solo])
     return result
 
@@ -751,7 +783,7 @@ def _build_phrase_layout_metadata(phrase, scales=None, max_chars=MAX_CHARS_PER_L
     return wrapped_lines, line_ranges
 
 
-def _render_word(text, *, active, scale, base_font_size, preset, balloon=False):
+def _render_word(text, *, active, scale, base_font_size, preset, balloon_level=None):
     escaped = _escape_ass_text(safe_upper(text) if preset["uppercase"] else text)
     colour = ACTIVE_COLOUR if active else INACTIVE_COLOUR
 
@@ -764,11 +796,11 @@ def _render_word(text, *, active, scale, base_font_size, preset, balloon=False):
     else:
         colour_tags = f"\\c{colour}"
 
-    if active and balloon:
+    if active and balloon_level:
         # Only the opacity half of the balloon can run here: the word shares
         # its line with the rest of the phrase, so scaling it would push the
         # others sideways. The inflate rides on the phrase entrance instead.
-        colour_tags += _balloon_alpha_tags()
+        colour_tags += _balloon_alpha_tags(balloon_level)
 
     if scale > 1.0:
         # Inline \fs, never \r: a style reset would also wipe the karaoke
@@ -782,31 +814,33 @@ def _render_word(text, *, active, scale, base_font_size, preset, balloon=False):
     return f"{{{opening}}}{escaped}{closing}"
 
 
-def _balloon_scale_tags():
+def _balloon_scale_tags(level="strong"):
     """Inflate-with-overshoot, safe only where nothing shares the event.
 
     Scaling changes glyph advances, so this may only be applied to an event
     that carries a single word or the whole caption at once — never to one
     word inside a shared line, which would reflow the others.
     """
+    profile = BALLOON_MOTION_PROFILES[level]
     return (
-        f"\\fscx{BALLOON_START_SCALE}\\fscy{BALLOON_START_SCALE}"
-        f"\\blur{BALLOON_START_BLUR}"
-        f"\\t(0,{BALLOON_INFLATE_MS},\\fscx{BALLOON_OVERSHOOT_SCALE}\\fscy{BALLOON_OVERSHOOT_SCALE})"
-        f"\\t(0,{BALLOON_FADE_MS},\\blur0)"
-        f"\\t({BALLOON_INFLATE_MS},{BALLOON_INFLATE_MS + BALLOON_SETTLE_MS},\\fscx100\\fscy100)"
+        f"\\fscx{profile['start_scale']}\\fscy{profile['start_scale']}"
+        f"\\blur{profile['start_blur']}"
+        f"\\t(0,{profile['inflate_ms']},\\fscx{profile['overshoot_scale']}\\fscy{profile['overshoot_scale']})"
+        f"\\t(0,{profile['fade_ms']},\\blur0)"
+        f"\\t({profile['inflate_ms']},{profile['inflate_ms'] + profile['settle_ms']},\\fscx100\\fscy100)"
     )
 
 
-def _balloon_alpha_tags():
+def _balloon_alpha_tags(level="strong"):
+    profile = BALLOON_MOTION_PROFILES[level]
     return (
-        f"\\alpha{BALLOON_START_ALPHA}"
-        f"\\t(0,{BALLOON_FADE_MS},\\alpha{BALLOON_FULL_ALPHA})"
+        f"\\alpha{profile['start_alpha']}"
+        f"\\t(0,{profile['fade_ms']},\\alpha{BALLOON_FULL_ALPHA})"
     )
 
 
 def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_font_size=100,
-                                   max_chars=None, balloon=False):
+                                   max_chars=None, balloon_level=None):
     if preset is None:
         preset = CAPTION_STYLE_PRESETS[DEFAULT_CAPTION_STYLE]
     if max_chars is None:
@@ -817,7 +851,10 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
     # there at once, so the wrapping still has to be computed from the FULL
     # phrase (otherwise the line break would jump as words are revealed) but
     # only words up to the active one are actually emitted.
-    scale_override = BALLOON_EMPHASIS_SCALE if balloon else None
+    scale_override = (
+        BALLOON_MOTION_PROFILES[balloon_level]["emphasis_scale"]
+        if balloon_level else None
+    )
     scales = _word_scales(phrase, preset, max_chars=max_chars, scale_override=scale_override)
     wrapped_lines, line_ranges = _build_phrase_layout_metadata(
         phrase, scales=scales, max_chars=max_chars,
@@ -825,9 +862,9 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
     lines = []
 
     for start_idx, end_idx in line_ranges:
-        if balloon and start_idx > active_word_idx:
+        if balloon_level and start_idx > active_word_idx:
             continue  # this line has not been reached by the spoken word yet
-        reveal_end = min(end_idx, active_word_idx + 1) if balloon else end_idx
+        reveal_end = min(end_idx, active_word_idx + 1) if balloon_level else end_idx
         rendered_words = []
         for word_idx in range(start_idx, reveal_end):
             rendered_words.append(
@@ -837,7 +874,7 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
                     scale=scales[word_idx],
                     base_font_size=base_font_size,
                     preset=preset,
-                    balloon=balloon,
+                    balloon_level=balloon_level,
                 )
             )
         if rendered_words:
@@ -847,7 +884,7 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
 
 
 def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_height, margin_v,
-                          max_chars=None, balloon=False):
+                          max_chars=None, balloon_level=None):
     """One big word, centred, popping in — used when the speaker slows down."""
     text = _escape_ass_text(safe_upper(word["text"]) if preset["uppercase"] else word["text"])
     size = int(round(base_font_size * max(1.25, preset["emphasis_scale"])))
@@ -861,9 +898,9 @@ def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_he
     # on the same optical line the wrapped captions occupy.
     pos_y = max(size, int(video_height - margin_v - size * 0.5))
     colour = ACTIVE_COLOUR if word.get("emphasis") else INACTIVE_COLOUR
-    if balloon:
+    if balloon_level:
         # A solo event stands alone, so the full balloon is safe here.
-        motion = _balloon_scale_tags() + _balloon_alpha_tags()
+        motion = _balloon_scale_tags(balloon_level) + _balloon_alpha_tags(balloon_level)
     else:
         motion = f"\\fscx70\\fscy70\\t(0,{SOLO_POP_MS},\\fscx100\\fscy100)\\fad(40,0)"
     return (
@@ -938,7 +975,7 @@ def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0):
                 we = min(we, max(ws + 0.001, caption_cutoff))
 
             carried = {"text": w["text"], "start": ws, "end": we}
-            for key in ("emphasis", "solo", "synthetic", "balloon_eligible"):
+            for key in ("emphasis", "solo", "synthetic", "balloon_eligible", "balloon_level"):
                 if w.get(key):
                     carried[key] = w[key]
             copied.append(carried)
@@ -1021,7 +1058,9 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
             if not phrase:
                 continue
 
-            phrase_balloon = balloon and bool(phrase[0].get("balloon_eligible"))
+            phrase_balloon_level = (
+                phrase[0].get("balloon_level") if balloon else None
+            )
 
             for word_idx, word in enumerate(phrase):
                 event_start = word["start"]
@@ -1039,14 +1078,14 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
                         video_height=video_height,
                         margin_v=margin_v,
                         max_chars=max_chars,
-                        balloon=phrase_balloon,
+                        balloon_level=phrase_balloon_level,
                     )
                 else:
                     highlight_text = _build_highlight_text_for_word(
                         phrase, word_idx, preset=preset, base_font_size=font_size,
-                        max_chars=max_chars, balloon=phrase_balloon,
+                        max_chars=max_chars, balloon_level=phrase_balloon_level,
                     )
-                    if phrase_balloon:
+                    if phrase_balloon_level:
                         # Every new word is its own arrival, not just the
                         # phrase's first: scaling the whole event is
                         # reflow-free by definition — every currently visible
@@ -1055,7 +1094,7 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
                         # it grows. That growth is also what makes a new word
                         # visibly shove the existing ones aside — the effect
                         # is intentional, not a bug.
-                        prefix = "{" + _balloon_scale_tags() + "}"
+                        prefix = "{" + _balloon_scale_tags(phrase_balloon_level) + "}"
                     elif word_idx == 0:
                         # Fade-in only when the phrase first appears (first word)
                         prefix = r"{\fad(100,0)}"
