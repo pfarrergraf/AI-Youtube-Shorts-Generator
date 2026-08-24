@@ -35,6 +35,7 @@ from Components.ThumbnailReferenceGate import (  # noqa: E402
     validate_exact_spelling,
 )
 from Components.ThumbnailTypeEngine import layout_and_render  # noqa: E402
+from Components.TitleCard import _resolve_thumbnail_mode, generate_thumbnail_card  # noqa: E402
 
 CANVAS = (1080, 1920)
 REFERENCE_DIR = Path(__file__).resolve().parents[1] / "thumbnail_ideal_examples"
@@ -210,6 +211,15 @@ def test_gate_without_calibration_reports_but_does_not_fail():
 # ────────────────────────────────────────────────────────────────────────────
 # Composer
 # ────────────────────────────────────────────────────────────────────────────
+
+def test_hero_is_the_title_card_default_and_maps_to_epic():
+    import inspect
+
+    assert inspect.signature(generate_thumbnail_card).parameters["mode"].default == "hero"
+    assert _resolve_thumbnail_mode("hero") == "epic"
+    assert _resolve_thumbnail_mode("epic") == "epic"
+    assert _resolve_thumbnail_mode(None) == "epic"
+
 
 def _fake_subject(w=400, h=900) -> Image.Image:
     subject = Image.new("RGBA", (w, h), (0, 0, 0, 0))

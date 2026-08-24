@@ -994,6 +994,12 @@ def _render_distortion_frame(base, text, p, w, h, font_path):
     return base
 
 
+def _resolve_thumbnail_mode(mode):
+    """Normalise the public hero name while retaining the historic alias."""
+    resolved = str(mode or "hero").lower()
+    return "epic" if resolved == "hero" else resolved
+
+
 def generate_thumbnail_card(
     video_path,
     hook_text,
@@ -1002,7 +1008,7 @@ def generate_thumbnail_card(
     output_path=None,
     thumbnail_image_path=None,
     style="classic",
-    mode="legacy",
+    mode="hero",
     brief=None,
     variants_dir=None,
 ):
@@ -1029,9 +1035,12 @@ def generate_thumbnail_card(
         ``"classic"`` (default), ``"random"``, ``"auto"``,
         ``"text_reveal"``, or ``"dramatic"``.
     mode : str
-        ``"legacy"`` keeps the old renderer. ``"v2"`` renders three
-        portrait variants into a separate artifact folder, scores them, then
-        uses the winner for both the uploaded thumbnail and first-frame card.
+        ``"hero"`` (default) uses the reference-look compositor with approved
+        speaker heroes and narrative assets. ``"epic"`` is retained as a
+        backwards-compatible alias. ``"v2"`` renders three portrait variants
+        into a separate artifact folder, scores them, then uses the winner for
+        both the uploaded thumbnail and first-frame card. ``"legacy"`` keeps
+        the old renderer for explicit comparisons.
 
     Returns
     -------
@@ -1063,12 +1072,12 @@ def generate_thumbnail_card(
             os.path.dirname(video_path), "_thumbnail.mp4"
         )
 
-    resolved_mode = str(mode or "legacy").lower()
+    resolved_mode = _resolve_thumbnail_mode(mode)
 
     # Prefer the approved, text-free speaker hero over the real extracted
     # frame whenever one exists — this is the hero-architecture path and now
-    # applies to v2/v2_test/legacy (whichever mode is actually live), since
-    # v2 is what ships in production. "epic" already does its own hero-vs-
+    # applies to v2/v2_test/legacy. The hero/epic compositor already does its
+    # own hero-vs-
     # real-frame decision inside compose(), so it is excluded here to avoid
     # matting a person out of an already-synthetic hero plate. Falls back to
     # the real frame automatically when no hero is approved for this speaker.
