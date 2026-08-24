@@ -47,3 +47,20 @@ debug_run.log
 
 # Legacy / unused
 requirements2.txt
+
+# Local thumbnail experiments and generated previews
+thumbnail_lab_out*/
+thumbnail_ideal_examples/
+assets/thumbnail_story_assets/previews/
+
+# Local worktrees / recovery snapshots
+.claude/worktrees/
+.archive/
+
+# Generated InDesign artifacts (editable sources remain versioned)
+adobe/indesign/ParakeetHero_InDesign_Prototype/_superseded_*/
+adobe/indesign/ParakeetHero_InDesign_Prototype/output/
+adobe/indesign/ParakeetHero_InDesign_Prototype/output_final/
+
+# Windows alternate-data-stream sidecars copied into WSL
+*.identifier

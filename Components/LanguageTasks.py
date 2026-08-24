@@ -354,6 +354,13 @@ OPENING AND ENDING QUALITY CHECK:
 - Ask: "Does the final sentence feel like a real ending, not a truncation?"
 - If the ending feels cut off, include the next resolving sentence or reaction.
 - Prefer a slightly longer clip with a meaningful opening and a complete ending over a shorter clip with a sharper but confusing cut.
+- A forward-looking sentence is NOT an ending. Phrases such as "jetzt wird es
+  interessant", "gleich zeige ich euch", "die Frage ist", "aber jetzt kommt",
+  or any announcement of what follows are setup for the NEXT payoff. Extend
+  through that payoff or reject the candidate.
+- Reject excerpts that are merely sensible sermon material but lack a distinct
+  turn, payoff, memorable formulation, resolved tension, or actionable insight.
+  "The speaker says something true" is not enough to make a highlight.
 
 CRITICAL RULES:
 - **The payoff is NON-NEGOTIABLE.** A 90-second clip that includes the punchline beats a 45-second clip that cuts before it. If the punchline is at second 88 of a story that starts at second 0, the clip is 88+ seconds. So be it.
@@ -398,6 +405,10 @@ Return ONLY a JSON array (no markdown fences). Each element:
     "content": "<1-2 sentence summary: what happens AND what the payoff/punchline is>",
     "impact": <1-10 integer — honest audience impact score>,
     "confidence": <0.00-1.00 confidence that this stands alone as a clip>,
+    "opening_complete": <true only if no prior sentence is needed>,
+    "ending_complete": <true only if the thought/payoff has actually landed>,
+    "cliffhanger": <true if the ending announces, asks for, or sets up what comes next>,
+    "payoff_excerpt": "<short verbatim final line that supplies the payoff>",
     "why": "<brief explanation of what makes this clip compelling>",
     "speaker": "<speaker name if known, else null>",
     "transcript_excerpt": "<short verbatim excerpt from the transcript for this clip>",
@@ -978,8 +989,28 @@ def GetAllHighlights(Transcription, reference_text=None, speaker_profile_text=No
             for item in parsed:
                 if not isinstance(item, dict):
                     continue
+                def _explicit_true(value):
+                    return value is True or str(value).strip().lower() in {"true", "yes", "1"}
+
+                opening_complete = _explicit_true(item.get("opening_complete"))
+                ending_complete = _explicit_true(item.get("ending_complete"))
+                cliffhanger = _explicit_true(item.get("cliffhanger"))
+                payoff_excerpt = str(item.get("payoff_excerpt") or "").strip()
+                if not opening_complete or not ending_complete or cliffhanger or not payoff_excerpt:
+                    print(
+                        "  Rejected incomplete highlight candidate: "
+                        f"{item.get('title') or item.get('hook') or '<untitled>'}"
+                    )
+                    continue
                 normalised = normalise_highlight_candidate(item)
                 if not normalised:
+                    continue
+                if normalised["impact"] < 7 or normalised["confidence"] < 0.75:
+                    print(
+                        "  Rejected weak highlight candidate: "
+                        f"{normalised.get('title') or '<untitled>'} "
+                        f"(impact={normalised['impact']}, confidence={normalised['confidence']:.2f})"
+                    )
                     continue
                 # 15-90s is the LLM's target, not a hard ceiling (see prompt);
                 # only reject genuinely broken candidates here. The upper

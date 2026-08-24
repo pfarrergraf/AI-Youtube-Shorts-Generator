@@ -102,6 +102,55 @@ def _ease_in_out(t):
     return t * t * (3.0 - 2.0 * t)
 
 
+def _motion_speaker_center(previous_gray, current_frame):
+    """Return the horizontal centre of a large moving person-like region.
+
+    The face model is frontal-face biased and can miss a preacher who turns
+    sideways. On a static stage camera the speaker is normally the largest
+    tall moving region, while signs and lecterns stay fixed. This fallback is
+    deliberately conservative: it rejects shot-wide changes and small moving
+    audience regions.
+    """
+    current_gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
+    current_gray = cv2.GaussianBlur(current_gray, (9, 9), 0)
+    if previous_gray is None or previous_gray.shape != current_gray.shape:
+        return None, current_gray
+
+    height, width = current_gray.shape[:2]
+    delta = cv2.absdiff(current_gray, previous_gray)
+    _, mask = cv2.threshold(delta, 18, 255, cv2.THRESH_BINARY)
+    changed_ratio = float(np.count_nonzero(mask)) / float(mask.size or 1)
+    if changed_ratio > 0.45:
+        return None, current_gray
+
+    close_size = max(7, int(round(width * 0.009)))
+    if close_size % 2 == 0:
+        close_size += 1
+    dilate_size = max(5, int(round(width * 0.005)))
+    if dilate_size % 2 == 0:
+        dilate_size += 1
+    mask = cv2.morphologyEx(
+        mask, cv2.MORPH_CLOSE, np.ones((close_size, close_size), np.uint8)
+    )
+    mask = cv2.dilate(
+        mask, np.ones((dilate_size, dilate_size), np.uint8), iterations=2
+    )
+
+    candidates = []
+    min_area = 0.002 * width * height
+    for contour in cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]:
+        x, y, box_w, box_h = cv2.boundingRect(contour)
+        area = float(cv2.contourArea(contour))
+        if area < min_area or box_h < 0.22 * height:
+            continue
+        if box_w > 0.65 * width or box_h > 0.95 * height:
+            continue
+        candidates.append((area, x + box_w // 2))
+    if not candidates:
+        return None, current_gray
+    return int(max(candidates)[1]), current_gray
+
+
 # ======================================================================
 # Camera effect types
 # ======================================================================
@@ -309,6 +358,9 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
     detect_interval = max(1, int(fps / 3))
 
     face_detections = {}
+    face_hits = 0
+    motion_hits = 0
+    previous_detection_gray = None
     frame_idx = 0
     while True:
         ret, frame = cap.read()
@@ -339,10 +391,25 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
                     fx, fy, fw, fh = best_face
                     face_center_x = fx + fw // 2
             if face_center_x is not None:
+                face_hits += 1
+                # Keep the motion baseline current even when the frontal face
+                # path succeeds, so a later side turn can fall back cleanly.
+                _, previous_detection_gray = _motion_speaker_center(
+                    previous_detection_gray, frame
+                )
+            else:
+                face_center_x, previous_detection_gray = _motion_speaker_center(
+                    previous_detection_gray, frame
+                )
+                if face_center_x is not None:
+                    motion_hits += 1
+            if face_center_x is not None:
                 face_detections[frame_idx] = face_center_x
         frame_idx += 1
         if frame_idx % 200 == 0:
             print(f"  Detected {frame_idx}/{total_frames} frames")
+
+    print(f"  Tracking detections: {face_hits} face, {motion_hits} motion fallback")
 
     center_x = (original_width - vertical_width) // 2
 
@@ -576,7 +643,18 @@ def combine_videos(video_with_audio, video_without_audio, output_filename,
 
             speech_filter = "[1:a]aresample=48000"
             if target_lufs is not None:
-                speech_filter += f",loudnorm=I={target_lufs}:TP=-1.0:LRA=11:print_format=none"
+                # ``loudnorm`` keeps roughly three seconds of look-ahead.  If
+                # its output is consumed by ``amix`` and the mux is bounded by
+                # ``-shortest``, FFmpeg can discard that buffered tail instead
+                # of flushing it.  This removed the last 3.1 s of real speech
+                # from an ICF Zürich render while the music continued.  Pad
+                # before normalization to force the flush, then trim back to
+                # the exact body duration.  The padding is never audible.
+                speech_filter += (
+                    f",apad=pad_dur=4.0,"
+                    f"loudnorm=I={target_lufs}:TP=-1.0:LRA=11:print_format=none,"
+                    f"atrim=0:{total_dur:.3f},asetpts=N/SR/TB"
+                )
             elif speech_gain_db:
                 speech_filter += f",volume={speech_gain_db:.1f}dB"
             speech_filter += "[speech]"

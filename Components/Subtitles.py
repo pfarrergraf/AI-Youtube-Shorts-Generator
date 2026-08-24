@@ -45,16 +45,18 @@ BLACK_FONT_DIR = os.path.expanduser(
 )
 
 CAPTION_STYLE_PRESETS = {
-    # Byte-identical to what the pipeline has always emitted.
+    # The old classic style used BorderStyle 3 (opaque black box). Audience
+    # feedback found that block visually heavy, so classic now uses the same
+    # clean contour treatment as the newer styles.
     "classic": {
         "fontname": "Arial Black",
         "fontsdir": None,
         "bold": 1,
-        "border_style": 3,          # opaque box
-        "outline_colour": OUTLINE_COLOUR,
-        "back_colour": BOX_COLOUR,
-        "outline_ratio": 0.0035,
-        "shadow_ratio": 0.0012,
+        "border_style": 1,
+        "outline_colour": "&H00000000",
+        "back_colour": "&H80000000",
+        "outline_ratio": 0.005,
+        "shadow_ratio": 0.002,
         "uppercase": False,
         "font_ratio": 0.053,
         "emphasis_scale": 1.0,
@@ -128,6 +130,22 @@ BALLOON_SETTLE_MS = 85          # overshoot → final size
 BALLOON_START_ALPHA = "&H80&"   # 50% transparent
 BALLOON_FULL_ALPHA = "&H00&"    # fully opaque
 BALLOON_FADE_MS = 130           # duration of the opacity rise
+# A word popping in before it is spoken needs the inflate+settle to be done
+# by the time the voice hits — that natural lead-in is exactly the pop's own
+# duration.
+BALLOON_LEAD_IN_SEC = (BALLOON_INFLATE_MS + BALLOON_SETTLE_MS) / 1000.0
+# The balloon deliberately dominates far more than the shared 1.5x emphasis
+# scale — the punch word is meant to shove its neighbours aside.
+BALLOON_EMPHASIS_SCALE = 2.2
+# Balloon motion is readable only in genuinely slow delivery. WPM is measured
+# from the phrase's real word timestamps; synthetic/retimed timings never
+# qualify because they describe the retimer rather than the speaker.
+BALLOON_MAX_WPM = 90.0
+
+# Bottom-aligned ASS captions move downward when MarginV becomes smaller.
+# 38% keeps them below the previous 45%-from-bottom placement without entering
+# the platform UI / lower-third danger zone.
+CAPTION_MARGIN_BOTTOM_RATIO = 0.38
 
 # Emphasis fallback for every path without an LLM signal (raw ASR, captions
 # stage, --skip-llm-cleanup).  German function words never carry the accent.
@@ -415,6 +433,27 @@ def _phrase_is_slow(phrase):
     return _median(onsets) >= SLOW_MEDIAN_ONSET_SEC
 
 
+def _phrase_wpm(phrase):
+    """Measured words per minute for one phrase, or infinity if unreliable."""
+    if not phrase or any(w.get("synthetic") for w in phrase):
+        return float("inf")
+    try:
+        duration = float(phrase[-1]["end"]) - float(phrase[0]["start"])
+    except (KeyError, TypeError, ValueError):
+        return float("inf")
+    if duration <= 0:
+        return float("inf")
+    return len(phrase) * 60.0 / duration
+
+
+def _mark_balloon_eligibility(phrases):
+    for phrase in phrases:
+        eligible = _phrase_wpm(phrase) < BALLOON_MAX_WPM
+        for word in phrase:
+            word["balloon_eligible"] = eligible
+    return phrases
+
+
 def _solo_units(phrase):
     """Group a phrase into the smallest units that still mean something.
 
@@ -459,6 +498,8 @@ def split_slow_phrases(phrases):
             }
             if any(w.get("emphasis") for w in unit):
                 solo["emphasis"] = True
+            if all(w.get("balloon_eligible") for w in unit):
+                solo["balloon_eligible"] = True
             result.append([solo])
     return result
 
@@ -671,14 +712,14 @@ def _drop_leading_partial_phrase(phrases, *, subtitle_start_time, transcriptions
     return phrases
 
 
-def _word_scales(phrase, preset, max_chars=None):
+def _word_scales(phrase, preset, max_chars=None, scale_override=None):
     """Per-word size multipliers, constant for every event of the phrase.
 
     Constant is the whole point: each word's Dialogue event re-renders the
     entire phrase, so an override set that changed between events would
     reflow the centred line and make the caption jitter word by word.
     """
-    scale = float(preset.get("emphasis_scale", 1.0))
+    scale = float(scale_override if scale_override is not None else preset.get("emphasis_scale", 1.0))
     words = phrase[:MAX_WORDS_PER_PHRASE]
     if scale <= 1.0:
         return [1.0] * len(words)
@@ -768,15 +809,24 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
     if max_chars is None:
         max_chars = preset["max_chars_per_line"]
 
-    scales = _word_scales(phrase, preset, max_chars=max_chars)
+    # The balloon deliberately reverses the no-reflow invariant every other
+    # style relies on: words build up one at a time instead of all standing
+    # there at once, so the wrapping still has to be computed from the FULL
+    # phrase (otherwise the line break would jump as words are revealed) but
+    # only words up to the active one are actually emitted.
+    scale_override = BALLOON_EMPHASIS_SCALE if balloon else None
+    scales = _word_scales(phrase, preset, max_chars=max_chars, scale_override=scale_override)
     wrapped_lines, line_ranges = _build_phrase_layout_metadata(
         phrase, scales=scales, max_chars=max_chars,
     )
     lines = []
 
     for start_idx, end_idx in line_ranges:
+        if balloon and start_idx > active_word_idx:
+            continue  # this line has not been reached by the spoken word yet
+        reveal_end = min(end_idx, active_word_idx + 1) if balloon else end_idx
         rendered_words = []
-        for word_idx in range(start_idx, end_idx):
+        for word_idx in range(start_idx, reveal_end):
             rendered_words.append(
                 _render_word(
                     phrase[word_idx]["text"],
@@ -787,7 +837,8 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
                     balloon=balloon,
                 )
             )
-        lines.append(" ".join(rendered_words))
+        if rendered_words:
+            lines.append(" ".join(rendered_words))
 
     return r"\N".join(lines)
 
@@ -817,7 +868,7 @@ def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_he
     )
 
 
-def _normalise_phrase_timings(word_events):
+def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0):
     """Make all word Dialogue events strictly sequential — no overlaps ever.
 
     A global cursor tracks the end of the last emitted event.  Each new
@@ -826,6 +877,20 @@ def _normalise_phrase_timings(word_events):
     next word's start (no gap).  Between phrases, the last word extends to
     ``min(natural_end, next_phrase_start)`` which may leave a deliberate
     silent gap.
+
+    ``caption_cutoff``, when given, is the clip-relative end of the last
+    audible word in the render window. ``HOLD_AFTER_PHRASE_SEC`` otherwise
+    holds the final caption 1.5s past its word regardless of how much clip
+    is actually left — measured on real renders to overrun the clip end by
+    up to +1.44s of caption sitting on top of silence (HANDOVER_CAPTIONS.md,
+    Aufgabe 2). Clamping every event's end to the cutoff removes exactly
+    that overrun without touching anything that is still within earshot.
+
+    ``lead_in``, when given (balloon mode only), pulls every event's start
+    forward so a word's inflate+settle animation finishes by the time the
+    voice actually reaches it, instead of popping in on top of the syllable.
+    The strict-sequencing cursor still applies, so it never overlaps the
+    still-running previous event.
     """
     if not word_events:
         return word_events
@@ -841,8 +906,9 @@ def _normalise_phrase_timings(word_events):
         n = len(phrase)
         copied = []
 
+        phrase_lead_in = lead_in if phrase[0].get("balloon_eligible") else 0.0
         for j, w in enumerate(phrase):
-            ws = max(w["start"], cursor)
+            ws = max(w["start"] - phrase_lead_in, cursor)
             # A solo word is its own phrase, so it would otherwise inherit the
             # full inter-phrase hold and linger on screen long after it was
             # spoken — which defeats the point of word-by-word pacing.
@@ -850,19 +916,26 @@ def _normalise_phrase_timings(word_events):
 
             if j + 1 < n:
                 # Mid-phrase: use next word's start (no gap within phrase).
-                we = max(ws + 0.001, phrase[j + 1]["start"])
+                # The next event pulls its own start forward by lead_in too,
+                # so this one must end at that same earlier point.
+                we = max(ws + 0.001, phrase[j + 1]["start"] - phrase_lead_in)
             elif i + 1 < total and word_events[i + 1]:
                 # Last word of phrase: hold briefly, but never overlap next phrase
                 natural = w["end"] + hold
-                next_start = word_events[i + 1][0]["start"]
+                next_phrase = word_events[i + 1]
+                next_lead_in = lead_in if next_phrase[0].get("balloon_eligible") else 0.0
+                next_start = next_phrase[0]["start"] - next_lead_in
                 we = min(natural, next_start)
                 we = max(we, ws + 0.001)
             else:
                 # Very last word overall
                 we = max(ws + 0.001, w["end"] + hold)
 
+            if caption_cutoff is not None:
+                we = min(we, max(ws + 0.001, caption_cutoff))
+
             carried = {"text": w["text"], "start": ws, "end": we}
-            for key in ("emphasis", "solo", "synthetic"):
+            for key in ("emphasis", "solo", "synthetic", "balloon_eligible"):
                 if w.get(key):
                     carried[key] = w[key]
             copied.append(carried)
@@ -875,15 +948,16 @@ def _normalise_phrase_timings(word_events):
 
 
 def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_events=None,
-                    style=DEFAULT_CAPTION_STYLE, pop=DEFAULT_CAPTION_POP):
+                    style=DEFAULT_CAPTION_STYLE, pop=DEFAULT_CAPTION_POP, caption_cutoff=None):
     preset = resolve_caption_style(style)
     balloon = str(pop or "").lower() == "balloon"
 
     # slightly smaller than before
     font_size = max(33, int(video_height * preset["font_ratio"]) - 2)
 
-    # captions centered in the frame (~45% from bottom), well above the lower-third overlay
-    margin_v = max(500, int(video_height * 0.45))
+    # Audience feedback preferred the captions lower than the previous 45%
+    # placement, while still leaving room for platform controls.
+    margin_v = max(420, int(video_height * CAPTION_MARGIN_BOTTOM_RATIO))
     margin_h = max(70, int(video_width * 0.10))
 
     max_chars = _measured_char_budget(
@@ -922,6 +996,8 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
     ]
 
     if word_events:
+        if balloon:
+            word_events = _mark_balloon_eligibility(word_events)
         if preset["solo_slow"]:
             before = len(word_events)
             word_events = split_slow_phrases(word_events)
@@ -930,11 +1006,19 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
             # the timings are synthetic, and the result then looks identical to
             # the emphasis style with no indication why.
             print(f"[Subtitles] Word-by-word: {solo_count} solo word(s) from {before} phrase(s)")
-        word_events = _normalise_phrase_timings(word_events)
+        # A word popping in cold on the exact frame it is spoken reads as a
+        # cut, not a pop — bring every event forward so inflate+settle lands
+        # just before the voice does.
+        lead_in = BALLOON_LEAD_IN_SEC if balloon else 0.0
+        word_events = _normalise_phrase_timings(
+            word_events, caption_cutoff=caption_cutoff, lead_in=lead_in,
+        )
 
         for phrase in word_events:
             if not phrase:
                 continue
+
+            phrase_balloon = balloon and bool(phrase[0].get("balloon_eligible"))
 
             for word_idx, word in enumerate(phrase):
                 event_start = word["start"]
@@ -952,18 +1036,22 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
                         video_height=video_height,
                         margin_v=margin_v,
                         max_chars=max_chars,
-                        balloon=balloon,
+                        balloon=phrase_balloon,
                     )
                 else:
                     highlight_text = _build_highlight_text_for_word(
                         phrase, word_idx, preset=preset, base_font_size=font_size,
-                        max_chars=max_chars, balloon=balloon,
+                        max_chars=max_chars, balloon=phrase_balloon,
                     )
-                    if word_idx == 0 and balloon:
-                        # The whole caption inflates as it appears. Scaling the
-                        # entire event is reflow-free by definition — every word
-                        # grows together, so nothing shifts relative to anything
-                        # else, and libass keeps re-centring it while it grows.
+                    if phrase_balloon:
+                        # Every new word is its own arrival, not just the
+                        # phrase's first: scaling the whole event is
+                        # reflow-free by definition — every currently visible
+                        # word grows together, so nothing shifts relative to
+                        # anything else, and libass keeps re-centring it while
+                        # it grows. That growth is also what makes a new word
+                        # visibly shove the existing ones aside — the effect
+                        # is intentional, not a bug.
                         prefix = "{" + _balloon_scale_tags() + "}"
                     elif word_idx == 0:
                         # Fade-in only when the phrase first appears (first word)
@@ -1003,6 +1091,7 @@ def _build_word_events(
     transcriptions=None,
     trim_leading_partial_phrase=False,
     highlight_start_time=None,
+    highlight_end_time=None,
 ):
     adjusted = []
     dropped = 0
@@ -1014,6 +1103,16 @@ def _build_word_events(
         except Exception:
             highlight_offset = None
 
+    # Symmetric end boundary: a word starting after the highlight's own end
+    # belongs to whatever comes next in the sermon, not this clip — it would
+    # otherwise render as a caption for speech that was cut out of the video.
+    highlight_end_offset = None
+    if highlight_end_time is not None:
+        try:
+            highlight_end_offset = float(highlight_end_time) - float(video_start_time)
+        except Exception:
+            highlight_end_offset = None
+
     for w in word_timestamps:
         start = w["start"] - video_start_time
         end = w["end"] - video_start_time
@@ -1022,6 +1121,10 @@ def _build_word_events(
         if highlight_offset is not None:
             if start < highlight_offset:
                 # word starts before highlight — drop it
+                continue
+        if highlight_end_offset is not None:
+            if start > highlight_end_offset:
+                # word starts after the highlight — drop it
                 continue
         if end <= 0:
             continue
@@ -1070,6 +1173,8 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
                            video_start_time=0, word_timestamps=None,
                            trim_leading_partial_phrase=False,
                            highlight_start_time=None,
+                           highlight_end_time=None,
+                           caption_cutoff=None,
                            extra_vf="",
                            caption_style=DEFAULT_CAPTION_STYLE,
                            caption_pop=DEFAULT_CAPTION_POP):
@@ -1087,6 +1192,7 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
             transcriptions=transcriptions,
             trim_leading_partial_phrase=trim_leading_partial_phrase,
             highlight_start_time=highlight_start_time,
+            highlight_end_time=highlight_end_time,
         )
 
     relevant_transcriptions = []
@@ -1140,6 +1246,7 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
             word_events=word_events,
             style=caption_style,
             pop=caption_pop,
+            caption_cutoff=caption_cutoff,
         )
 
         preset = resolve_caption_style(caption_style)
