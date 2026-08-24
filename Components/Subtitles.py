@@ -107,11 +107,11 @@ CAPTION_STYLE_PRESETS = {
         "solo_slow": True,
     },
 }
-DEFAULT_CAPTION_STYLE = "classic"
+DEFAULT_CAPTION_STYLE = "emphasis"
 # Pop modifiers combine with any style: "none" leaves the style untouched,
 # "balloon" makes appearing words inflate and rise from half to full opacity.
 CAPTION_POPS = ("none", "balloon")
-DEFAULT_CAPTION_POP = "none"
+DEFAULT_CAPTION_POP = "balloon"
 
 # Word-by-word mode: a phrase qualifies when the speaker is genuinely slow.
 SLOW_MEDIAN_ONSET_SEC = 0.48   # median word-to-word onset distance (<= ~2 words/s)
