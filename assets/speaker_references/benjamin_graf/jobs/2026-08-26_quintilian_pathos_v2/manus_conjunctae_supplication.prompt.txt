@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "manus conjunctae" (Quintilian, Institutio Oratoria XI) — clasped hands, the gesture of supplication.
+Primary request: Create Benjamin Graf in the pose archetype manus_conjunctae_supplication.
+Input images: all supplied images are strict identity references; match his exact current age, exact face shape, exact skin, exact clean-shaven look (no beard, no stubble) and exact natural hair color (no grey) precisely as shown in the reference photos — the only permitted deviation from the references is removing eyeglasses. This must look unmistakably like the same real person in the reference photos, not a similar-looking stranger or relative.
+Expression: desperate, sincere plea to heaven on behalf of the listener, eyes closed, face uplifted, brow furrowed with the weight of the prayer. Skin tone healthy, warm, sun-kissed golden undertone. Hair styled exactly as in the reference photos, natural color, no grey. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: both hands clasped tightly together at chest height, knuckles pressed together, head tilted back and upward — the classical gesture of supplication.
+Clothing: black clergy robe (Talar) with white clerical collar tabs (Beffchen), no eyeglasses. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: chest-up, shot on an 85mm lens with shallow depth of field; keep one clean side of the frame free for later typography.
+Lighting/mood: single soft warm beam from directly above, dim worshipful surroundings with faint visible dust motes in the light, clear contrast against the black robe.
+Color palette: charcoal-black, warm amber beam, white.
+Story compatibility: desperate prayer, pleading with God for the listener, the weight of intercession.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "digiti collecti" (Quintilian, Institutio Oratoria XI) — the gathered fingertips used to mark a single precise, piercing point.
+Primary request: Create Benjamin Graf in the pose archetype digiti_collecti_precision.
+Input images: all supplied images are strict identity references; match his exact current age, exact face shape, exact skin, exact clean-shaven look (no beard, no stubble) and exact natural hair color (no grey) precisely as shown in the reference photos — the only permitted deviation from the references is removing eyeglasses. This must look unmistakably like the same real person in the reference photos, not a similar-looking stranger or relative.
+Expression: intensely focused, as if holding up one single unshakeable truth for the listener to see, eyes narrowed and locked on the viewer. Skin tone healthy, warm, sun-kissed golden undertone. Hair styled exactly as in the reference photos, natural color, no grey. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: right hand raised beside his face, thumb and fingertips pressed together in a precise pinch, as if holding a single sharp point up to the light — the classical gesture of precise argument.
+Clothing: navy fine-knit cashmere crew-neck pullover over a white dress shirt with contrast trim, collar visible. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: tight close-up, shot on a 105mm telephoto lens at f/2.0 for extreme shallow depth of field; keep one clean side of the frame free for later typography.
+Lighting/mood: single warm key light accentuating the texture of the hand and face, background falling into soft warm blur, clear contrast against the navy pullover.
+Color palette: navy, white, warm blur.
+Story compatibility: one precise, unshakeable truth, the single point that matters most.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

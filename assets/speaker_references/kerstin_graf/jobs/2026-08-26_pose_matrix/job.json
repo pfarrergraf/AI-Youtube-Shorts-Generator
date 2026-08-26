@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-26",
+  "speaker_key": "kerstin_graf",
+  "display_name": "Kerstin Graf",
+  "status": "generated",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/csm_EV_KG_OL__121_von_177__58ad899f10.webp",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/d5787f01.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/f605fa82.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/6c36c1c1.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/WhatsApp Image 2026-08-26 at 12.11.57.jpeg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/kerstin_graf_stage_gesture_v1.jpg"
+  ],
+  "jobs": [
+    {
+      "pose_id": "passionate_conviction",
+      "prompt_path": "passionate_conviction.prompt.txt",
+      "output": "kerstin_graf_passionate_conviction_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "joyful_proclamation",
+      "prompt_path": "joyful_proclamation.prompt.txt",
+      "output": "kerstin_graf_joyful_proclamation_candidate_v1.png",
+      "status": "rejected",
+      "approved": false,
+      "rejection_reason": "too bright / blown-out sky background"
+    },
+    {
+      "pose_id": "tender_compassion",
+      "prompt_path": "tender_compassion.prompt.txt",
+      "output": "kerstin_graf_tender_compassion_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "manus ad caelum" (Quintilian, Institutio Oratoria XI) — both arms raised to heaven, the ultimate invocation.
+Primary request: Create Benjamin Graf in the pose archetype manus_ad_caelum_invocation.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, body proportions — but he looks somewhat OLDER than the reference photos, with a neat, groomed 3-day stubble beard and a few subtle grey strands woven into his hair, not fully grey, no eyeglasses.
+Expression: overwhelming, total surrender, mouth open as if crying out directly to God, face turned fully upward, eyes closed or nearly closed. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed despite the grey strands. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: both arms thrust straight up above his head, palms open toward the sky — the ultimate classical invocation gesture — both clearly separated from the head/torso silhouette.
+Clothing: black clergy robe (Talar) with white clerical collar tabs (Beffchen), no eyeglasses. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: medium shot with generous headroom above the raised arms, shot on a 35mm wide-angle lens from a low angle; keep one clean side of the frame free for later typography.
+Lighting/mood: radiant golden-hour sun flares and cinematic lens flares streaming down from directly above, divine uplifting atmosphere, clear contrast against the black robe.
+Color palette: charcoal-black, radiant gold, warm white light.
+Story compatibility: total surrender, crying out to God, the ultimate cry of the soul.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; both raised arms must be spatially distinct from the head/torso silhouette so they can later be separated into independent depth layers; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

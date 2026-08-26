@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype open_palms_offering.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair, body proportions — no eyeglasses.
+Expression: gentle, open, surrendered — a soft, sincere expression, no eyeglasses. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed, a deliberate cut. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy) — someone people are drawn to follow, calibrated to this pose's specific emotion.
+Gesture: both palms open, held forward and slightly down at chest height, an offering/surrender gesture, both hands clearly separated from the torso silhouette.
+Clothing: light-blue fine-knit cashmere crew-neck pullover over a white dress shirt, collar visible. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: chest-up to waist, wide enough that both open palms are visible; keep one clean side of the frame free for later typography.
+Lighting/mood: soft warm even light, background a muted warm taupe that contrasts against the light-blue pullover.
+Color palette: light blue, white, warm taupe.
+Story compatibility: surrender, offering it all to God, letting go, grace.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; both hands must be spatially distinct from the head/torso silhouette so they can later be separated into independent depth layers; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim.

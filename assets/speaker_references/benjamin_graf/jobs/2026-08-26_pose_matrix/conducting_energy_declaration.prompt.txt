@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype conducting_energy_declaration.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, glasses if present, hair, skin tone and body proportions.
+Expression: radiant, fully absorbed, mouth open mid-word or mid-note, chin slightly lifted — the same unguarded, expressive energy as a conductor lost in the music.
+Gesture: both hands raised at chest height, fingers loosely shaped as if mid-gesture directing emphasis, both hands clearly separated from the torso silhouette.
+Clothing: crisp white dress shirt, collar open, no jacket.
+Composition/framing: chest-up, dynamic and slightly off-center; keep one clean side of the frame free for later typography.
+Lighting/mood: warm amber stage wash from below and the side, moody dark background, a touch of theatrical drama.
+Color palette: warm amber, deep red, charcoal.
+Story compatibility: passion, total surrender to the moment, worship, being fully alive.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; both hands must be spatially distinct from the head/torso silhouette so they can later be separated into independent depth layers.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume.

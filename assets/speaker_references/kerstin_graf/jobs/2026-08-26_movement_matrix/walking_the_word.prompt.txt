@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Kerstin Graf in the pose archetype walking_the_word.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair color and length, skin tone and body proportions.
+Expression: warm, confident, mid-sentence — mouth slightly open, eyes forward on the audience.
+Gesture/movement: caught mid-stride walking toward camera through a lit stage doorway, one foot forward and one heel just lifting off the floor, hair swept slightly by her own motion, one arm swinging naturally, the other holding a small open Bible loosely at her side.
+Clothing: soft cream/ivory blouse with dark tailored trousers — not the same red top as previous references.
+Composition/framing: full body, stage doorway framing wide enough to show the motion; keep one clean side of the frame free for later typography.
+Lighting/mood: tall warm backlight beam through haze coming through the doorway behind her, soft cool ambient fill on her face, moody dark stage curtains framing the sides.
+Color palette: warm amber haze, deep charcoal curtains, cream.
+Story compatibility: calling, a new season, stepping out in faith, God is calling you forward.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, motion clearly implied in the pose without being blurry or distorted.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume, motion blur artifacts that distort anatomy.

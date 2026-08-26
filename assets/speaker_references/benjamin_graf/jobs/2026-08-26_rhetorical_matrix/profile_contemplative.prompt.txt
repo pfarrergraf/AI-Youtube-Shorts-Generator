@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype profile_contemplative.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair, body proportions — no eyeglasses.
+Expression: thoughtful, near-profile gaze looking off into the distance, calm and grounded, no eyeglasses. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed, a deliberate cut. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy) — someone people are drawn to follow, calibrated to this pose's reflective quiet.
+Gesture: near-profile angle (roughly 80 degrees from camera), hands relaxed and out of frame or barely visible at his sides.
+Clothing: black clergy robe (Talar) with white clerical collar tabs (Beffchen), no eyeglasses. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: chest-up, near-profile angle; rule of thirds; keep one clean side of the frame free for later typography.
+Lighting/mood: soft warm rim light along the profile edge, background a deep warm charcoal that contrasts against the black robe.
+Color palette: charcoal-black, warm amber rim light, white.
+Story compatibility: vision, looking toward what God is calling him to, quiet resolve.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim.

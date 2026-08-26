@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-26",
+  "speaker_key": "benjamin_graf",
+  "display_name": "Benjamin Graf",
+  "status": "superseded",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf Portrait kl.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf in red.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf sminling.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/7a8c07c0.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/graf_benjamin.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf bei CCO-Feier Hintergrund blurred.png",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf speaking.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf bei Hochzeit am Dirigieren.jpg"
+  ],
+  "jobs": [
+    {
+      "pose_id": "declaring_word_at_pulpit",
+      "prompt_path": "declaring_word_at_pulpit.prompt.txt",
+      "output": "benjamin_graf_declaring_word_at_pulpit_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    },
+    {
+      "pose_id": "joyful_open_laugh",
+      "prompt_path": "joyful_open_laugh.prompt.txt",
+      "output": "benjamin_graf_joyful_open_laugh_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    },
+    {
+      "pose_id": "pointing_upward_conviction",
+      "prompt_path": "pointing_upward_conviction.prompt.txt",
+      "output": "benjamin_graf_pointing_upward_conviction_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    },
+    {
+      "pose_id": "walking_toward_calling",
+      "prompt_path": "walking_toward_calling.prompt.txt",
+      "output": "benjamin_graf_walking_toward_calling_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    },
+    {
+      "pose_id": "passionate_open_arms",
+      "prompt_path": "passionate_open_arms.prompt.txt",
+      "output": "benjamin_graf_passionate_open_arms_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    },
+    {
+      "pose_id": "urgent_lean_forward",
+      "prompt_path": "urgent_lean_forward.prompt.txt",
+      "output": "benjamin_graf_urgent_lean_forward_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    },
+    {
+      "pose_id": "reflective_calm_gaze",
+      "prompt_path": "reflective_calm_gaze.prompt.txt",
+      "output": "benjamin_graf_reflective_calm_gaze_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    },
+    {
+      "pose_id": "conducting_energy_declaration",
+      "prompt_path": "conducting_energy_declaration.prompt.txt",
+      "output": "benjamin_graf_conducting_energy_declaration_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    }
+  ],
+  "superseded_by": "../2026-08-26_rhetorical_matrix/job.json",
+  "superseded_reason": "All 8 candidates carried glasses over from a reference photo; several also had wardrobe (denim jacket, blazer), color, and contrast issues. See ../../STYLE_GUIDE.md."
+}

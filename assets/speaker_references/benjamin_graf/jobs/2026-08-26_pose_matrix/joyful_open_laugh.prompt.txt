@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype joyful_open_laugh.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, glasses if present, hair, skin tone and body proportions.
+Expression: genuine, unguarded laugh, eyes crinkled, mouth open.
+Gesture: one arm relaxed and slightly raised outward from the body as if mid-gesture while laughing, clearly separated from the torso silhouette.
+Clothing: casual white button-down shirt, sleeves rolled to the forearm.
+Composition/framing: chest-up portrait; rule of thirds; keep one clean side of the frame free for later typography.
+Lighting/mood: bright, warm, minimal shadow, uplifting.
+Color palette: warm white, soft gold, neutral grey.
+Story compatibility: joy, good news, celebration, community.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume.

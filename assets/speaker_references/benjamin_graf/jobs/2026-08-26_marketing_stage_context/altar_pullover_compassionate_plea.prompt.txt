@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype altar_pullover_compassionate_plea.
+Input images: all supplied images are strict identity references; match his exact current age, exact face shape, exact skin, exact clean-shaven look (no beard, no stubble) and exact natural hair color (no grey) precisely as shown in the reference photos — the only permitted deviation from the references is removing eyeglasses. This must look unmistakably like the same real person in the reference photos, not a similar-looking stranger or relative.
+Expression: compassionate, urgent plea — warm eyes slightly glistening, brow gently drawn in earnest care, mouth mid-word as if pleading with love, no eyeglasses. Skin tone healthy, warm, sun-kissed golden undertone. Hair styled exactly as in the reference photos, natural color, no grey. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy) — tenderness and urgency together, never cold or severe.
+Gesture: three-quarter angle, standing near an altar rail, one hand extended forward and slightly downward in an open, inviting plea, the other hand holding a black handheld wireless microphone close to his chest.
+Clothing: charcoal grey fine-knit cashmere crew-neck pullover over a burgundy collared dress shirt (Hemd), collar visible at the neckline. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: chest-up-to-waist, three-quarter angle; rule of thirds; keep one clean, darker side of the frame free for later typography.
+Lighting/mood: warm candlelight glow from the altar side mixed with a soft cool key light on his face, the altar's candles and a hint of cross softly out of focus behind him from shallow depth of field, background clearly darker and lower-contrast than his lit figure.
+Color palette: charcoal grey, burgundy, warm candle-gold.
+Story compatibility: a compassionate appeal at the altar, pastoral care, an invitation to come closer.
+Style/medium: photorealistic editorial portrait, shallow depth of field, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; the altar background (candles, hint of cross) must be legible as a real church setting but strongly defocused, never a flat seamless studio void; no visible audience or congregation; light direction must be visually explicit and physically coherent; clothing must read with clear contrast against the background; the handheld microphone must be anatomically plausible.
+Avoid: eyeglasses, stern, severe, cold, grim, disapproving, frowning, written words, captions, lettering, logo, watermark, lower third, audience, congregation, crowd, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt, seamless studio backdrop.

@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype suppressing_tears_subtle.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair, body proportions — no eyeglasses.
+Expression: deeply moved, eyes glassy and slightly moist as if holding back tears, jaw gently tight with restraint, a small vulnerable almost-smile — subtle and obvious at the same time, NOT full crying, no melodrama, no eyeglasses. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed, a deliberate cut. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy) — someone people are drawn to follow, calibrated to this pose's specific emotion.
+Gesture: one hand resting lightly over his own chest/heart, the other arm relaxed at his side, shoulders slightly drawn in.
+Clothing: navy fine-knit cashmere crew-neck pullover over a light-blue dress shirt, collar visible. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: tight chest-up; rule of thirds; keep one clean side of the frame free for later typography.
+Lighting/mood: soft warm intimate side light, background a deep warm charcoal that contrasts against the navy pullover.
+Color palette: navy, light blue, warm charcoal.
+Story compatibility: a vulnerable, deeply personal moment, grief held with hope, being moved to tears by grace.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, subtle visible moisture in the eyes without full tears.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, full crying, exaggerated melodrama.

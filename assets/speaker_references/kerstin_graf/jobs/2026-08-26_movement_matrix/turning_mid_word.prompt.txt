@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Kerstin Graf in the pose archetype turning_mid_word.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair color and length, skin tone and body proportions.
+Expression: caught mid-sentence, mouth open, eyes intent and engaged.
+Gesture/movement: torso and shoulders captured mid-turn toward the camera, hair visibly swinging with the turning motion, one hand gesturing naturally close to the body.
+Clothing: deep teal/turquoise top — not the same red top as previous references.
+Composition/framing: chest-up, dynamic diagonal energy from the turn; keep one clean side of the frame free for later typography.
+Lighting/mood: single warm side beam against a deep navy void, subtle rim light on the turning side of her hair.
+Color palette: deep teal, navy, warm amber rim light.
+Story compatibility: a turning point, repentance, a change of direction, transformation.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, motion clearly implied in the pose without being blurry or distorted.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume, motion blur artifacts that distort anatomy.

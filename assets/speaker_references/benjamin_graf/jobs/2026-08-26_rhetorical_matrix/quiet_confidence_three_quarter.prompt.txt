@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype quiet_confidence_three_quarter.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair, body proportions — no eyeglasses.
+Expression: calm, assured half-smile, relaxed confidence, no eyeglasses. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed, a deliberate cut. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy) — someone people are drawn to follow, calibrated to this pose's quiet confidence.
+Gesture: shot from a three-quarter angle, body turned partly away from camera, face turned back toward it, one hand resting naturally at his side.
+Clothing: oatmeal/beige fine-knit cashmere quarter-zip pullover over a white dress shirt, collar visible at the neckline. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: chest-up, three-quarter angle (not straight-on); rule of thirds; keep one clean side of the frame free for later typography.
+Lighting/mood: soft directional key light emphasizing the facial contour from this angle, background a muted warm grey that contrasts against the oatmeal pullover.
+Color palette: oatmeal/beige, white, warm grey.
+Story compatibility: quiet confidence, trustworthiness, steady leadership.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim.

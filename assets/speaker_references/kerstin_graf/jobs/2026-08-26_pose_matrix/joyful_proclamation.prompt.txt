@@ -1,0 +1,13 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Kerstin Graf in the pose archetype joyful_proclamation.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair color and length, skin tone and body proportions.
+Expression: radiant, unguarded joy — genuine laugh-smile, eyes crinkled, mouth open as if mid-exclamation.
+Gesture: left arm raised up and outward at a diagonal, open palm, clearly lifted away from the shoulder and torso into open space above and beside her, so the raised arm reads as a separate silhouette from the head/torso.
+Composition/framing: chest-up to slightly wider portrait to leave room for the raised arm; rule of thirds; keep one clean side of the frame free for later typography; visible gap of background between the raised arm and the torso.
+Lighting/mood: bright, airy top-side light, minimal shadow, uplifting.
+Color palette: sunlit gold, sky blue, warm white.
+Story compatibility: celebration, good news, hope, breakthrough, joy.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, believable handheld or lavalier microphone if natural.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; the raised arm must be spatially distinct from the head/torso silhouette (not overlapping or touching) so the two can later be separated into independent depth layers.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume.

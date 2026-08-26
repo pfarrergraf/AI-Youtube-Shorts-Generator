@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-26",
+  "speaker_key": "benjamin_graf",
+  "display_name": "Benjamin Graf",
+  "status": "generated",
+  "note": "Supersedes 2026-08-26_pose_matrix entirely (all 8 of those had glasses carried over from a reference photo; several also had wardrobe/contrast/jacket issues). See ../../STYLE_GUIDE.md for the standing rules baked into every prompt here: no glasses, warm tan skin tone, crisp pressed clothing, neatly styled hair, Talar-or-cashmere-pullover-over-Hemd wardrobe only, strong/visionary/commanding 'Paul the Apostle' persona, sufficient clothing/background contrast.",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf Portrait kl.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf in red.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf sminling.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/7a8c07c0.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/graf_benjamin.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf bei CCO-Feier Hintergrund blurred.png",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf speaking.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf bei Hochzeit am Dirigieren.jpg"
+  ],
+  "jobs": [
+    {
+      "pose_id": "declaring_word_at_pulpit_v2",
+      "prompt_path": "declaring_word_at_pulpit_v2.prompt.txt",
+      "output": "benjamin_graf_declaring_word_at_pulpit_v2_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "pointing_direct_challenge",
+      "prompt_path": "pointing_direct_challenge.prompt.txt",
+      "output": "benjamin_graf_pointing_direct_challenge_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "commanding_presence",
+      "prompt_path": "commanding_presence.prompt.txt",
+      "output": "benjamin_graf_commanding_presence_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "highlighting_key_point",
+      "prompt_path": "highlighting_key_point.prompt.txt",
+      "output": "benjamin_graf_highlighting_key_point_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "stage_zone_left_intimate",
+      "prompt_path": "stage_zone_left_intimate.prompt.txt",
+      "output": "benjamin_graf_stage_zone_left_intimate_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "stage_zone_right_declarative",
+      "prompt_path": "stage_zone_right_declarative.prompt.txt",
+      "output": "benjamin_graf_stage_zone_right_declarative_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "open_palms_offering",
+      "prompt_path": "open_palms_offering.prompt.txt",
+      "output": "benjamin_graf_open_palms_offering_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "hallelujah_celebration",
+      "prompt_path": "hallelujah_celebration.prompt.txt",
+      "output": "benjamin_graf_hallelujah_celebration_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "caring_leaning_in",
+      "prompt_path": "caring_leaning_in.prompt.txt",
+      "output": "benjamin_graf_caring_leaning_in_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "suppressing_tears_subtle",
+      "prompt_path": "suppressing_tears_subtle.prompt.txt",
+      "output": "benjamin_graf_suppressing_tears_subtle_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "quiet_confidence_three_quarter",
+      "prompt_path": "quiet_confidence_three_quarter.prompt.txt",
+      "output": "benjamin_graf_quiet_confidence_three_quarter_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "profile_contemplative",
+      "prompt_path": "profile_contemplative.prompt.txt",
+      "output": "benjamin_graf_profile_contemplative_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "low_angle_authority",
+      "prompt_path": "low_angle_authority.prompt.txt",
+      "output": "benjamin_graf_low_angle_authority_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "joyful_surprise",
+      "prompt_path": "joyful_surprise.prompt.txt",
+      "output": "benjamin_graf_joyful_surprise_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "gentle_invitation",
+      "prompt_path": "gentle_invitation.prompt.txt",
+      "output": "benjamin_graf_gentle_invitation_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "wide_gesture_explaining",
+      "prompt_path": "wide_gesture_explaining.prompt.txt",
+      "output": "benjamin_graf_wide_gesture_explaining_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    },
+    {
+      "pose_id": "quiet_prayer_eyes_closed",
+      "prompt_path": "quiet_prayer_eyes_closed.prompt.txt",
+      "output": "benjamin_graf_quiet_prayer_eyes_closed_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "energetic_step_forward",
+      "prompt_path": "energetic_step_forward.prompt.txt",
+      "output": "benjamin_graf_energetic_step_forward_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "warm_direct_eye_contact_closeup",
+      "prompt_path": "warm_direct_eye_contact_closeup.prompt.txt",
+      "output": "benjamin_graf_warm_direct_eye_contact_closeup_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "thoughtful_hand_on_heart",
+      "prompt_path": "thoughtful_hand_on_heart.prompt.txt",
+      "output": "benjamin_graf_thoughtful_hand_on_heart_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    }
+  ]
+}

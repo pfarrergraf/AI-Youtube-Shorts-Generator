@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "manus aversans" (Quintilian, Institutio Oratoria XI) — the warding-off hand that repels danger.
+Primary request: Create Benjamin Graf in the pose archetype manus_aversans_warning.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, body proportions — but he looks somewhat OLDER than the reference photos, with a neat, groomed 3-day stubble beard and a few subtle grey strands woven into his hair, not fully grey, no eyeglasses.
+Expression: fierce, urgent warning, as if physically pushing the listener away from an unseen danger they must flee — intense, protective, not cruel. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed despite the grey strands. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: right arm fully extended toward the viewer, palm flat and facing outward as if pushing something away — the classical warding-off gesture — clearly separated from the torso.
+Clothing: charcoal fine-knit cashmere crew-neck pullover over a light-blue dress shirt, collar visible. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: eye-level medium shot, shot on an 85mm portrait lens at f/1.4, razor-sharp focus on his eyes and hand; keep one clean side of the frame free for later typography.
+Lighting/mood: clean, minimalistic lighting with soft teal neon accents in the background, editorial photography style, clear contrast against the charcoal pullover.
+Color palette: charcoal grey, light blue, teal neon accent.
+Story compatibility: an urgent warning, flee what will destroy you, undeniable truth.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; the extended arm must be spatially distinct from the head/torso silhouette so it can later be separated into an independent depth layer; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

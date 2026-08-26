@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "manus prona" (Quintilian, Institutio Oratoria XI) — the downward-pressing palm used to still a crowd before a revelation.
+Primary request: Create Benjamin Graf in the pose archetype manus_prona_suppressing.
+Input images: all supplied images are strict identity references; match his exact current age, exact face shape, exact skin, exact clean-shaven look (no beard, no stubble) and exact natural hair color (no grey) precisely as shown in the reference photos — the only permitted deviation from the references is removing eyeglasses. This must look unmistakably like the same real person in the reference photos, not a similar-looking stranger or relative.
+Expression: intense restraint, holding back something enormous he is about to reveal, eyes wide and fixed, jaw set, breathing controlled. Skin tone healthy, warm, sun-kissed golden undertone. Hair styled exactly as in the reference photos, natural color, no grey. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: both hands pressed downward and slightly outward at chest height, palms flat and facing down, as if physically holding back an eruption of truth, both clearly separated from the torso.
+Clothing: charcoal fine-knit cashmere quarter-zip pullover over a white dress shirt, collar visible. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: tight chest-up, shot on a 105mm telephoto lens at f/2.0 for extreme shallow depth of field; keep one clean side of the frame free for later typography.
+Lighting/mood: moody, dark contemporary interior with a cold blue ambient rim light on one side and a single warm key light accentuating the texture of his hands and face on the other.
+Color palette: charcoal grey, cold blue rim light, warm skin tones.
+Story compatibility: the tension before a revelation, "what I'm about to tell you", holding the room.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, high contrast cinematic style.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; both hands must be spatially distinct from the head/torso silhouette so they can later be separated into independent depth layers; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

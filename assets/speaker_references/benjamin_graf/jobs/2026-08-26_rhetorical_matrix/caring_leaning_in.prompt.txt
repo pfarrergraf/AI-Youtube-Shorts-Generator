@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype caring_leaning_in.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair, body proportions — no eyeglasses.
+Expression: warm, deeply caring, gentle concern, softened brow, no eyeglasses. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed, a deliberate cut. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy) — someone people are drawn to follow, calibrated to this pose's specific emotion.
+Gesture: leaning his upper body gently toward the camera/listener, one hand extended forward and slightly open as if reaching to comfort someone, clearly separated from the torso.
+Clothing: burgundy fine-knit cashmere crew-neck pullover over a white dress shirt, collar visible. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: chest-up, intimate and close; keep one clean side of the frame free for later typography.
+Lighting/mood: soft warm side light, background a muted warm grey that contrasts against the burgundy pullover.
+Color palette: burgundy, white, warm grey.
+Story compatibility: pastoral care, comfort, being seen, compassion.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; the extended hand must be spatially distinct from the head/torso silhouette so it can later be separated into an independent depth layer; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim.

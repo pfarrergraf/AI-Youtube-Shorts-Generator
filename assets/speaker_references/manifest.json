@@ -405,6 +405,399 @@
         }
       ],
       "heroes": []
+    },
+    "kerstin_graf": {
+      "display_name": "Kerstin Graf",
+      "source_images": [
+        {
+          "path": "kerstin_graf/source/csm_EV_KG_OL__121_von_177__58ad899f10.webp",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "kerstin_graf/source/d5787f01.jpg",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "kerstin_graf/source/f605fa82.jpg",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "kerstin_graf/source/6c36c1c1.jpg",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "kerstin_graf/source/WhatsApp Image 2026-08-26 at 12.11.57.jpeg",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "kerstin_graf/source/kerstin_graf_stage_gesture_v1.jpg",
+          "role": "gesture_and_stage_energy",
+          "source_url": "extracted_frame_Predigt_Highlights_Oberlahnstein_A001C003_150101B2_CANON.MXF_t420s"
+        }
+      ],
+      "heroes": [
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_walking_the_word_v1.png",
+          "variant": "walking_the_word",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_open_embrace_sweep_v1.png",
+          "variant": "open_embrace_sweep",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_finger_to_heaven_v1.png",
+          "variant": "finger_to_heaven",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_surrendered_step_v1.png",
+          "variant": "surrendered_step",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_turning_mid_word_v1.png",
+          "variant": "turning_mid_word",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_striding_off_the_stage_edge_v1.png",
+          "variant": "striding_off_the_stage_edge",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_joyful_leap_v1.png",
+          "variant": "joyful_leap",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_urgent_lean_forward_v1.png",
+          "variant": "urgent_lean_forward",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_calling_out_close_v1.png",
+          "variant": "calling_out_close",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_passionate_conviction_v1.png",
+          "variant": "passionate_conviction",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "kerstin_graf/heroes/kerstin_graf_ai_tender_compassion_v1.png",
+          "variant": "tender_compassion",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        }
+      ]
+    },
+    "benjamin_graf": {
+      "display_name": "Benjamin Graf",
+      "source_images": [
+        {
+          "path": "benjamin_graf/source/Benjamin Graf Portrait kl.jpg",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/Benjamin Graf in red.jpg",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/Benjamin Graf sminling.jpg",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/7a8c07c0.jpg",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/graf_benjamin.jpg",
+          "role": "identity_clergy_vestment",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/Benjamin Graf bei CCO-Feier Hintergrund blurred.png",
+          "role": "identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/Benjamin Graf speaking.jpg",
+          "role": "gesture_and_stage_energy",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/Benjamin Graf bei Hochzeit am Dirigieren.jpg",
+          "role": "gesture_and_stage_energy",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/20251224_132839.jpg",
+          "role": "supporting_identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/20260213_185800.jpg",
+          "role": "supporting_identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/20260328_091145.jpg",
+          "role": "supporting_identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/20260509_170652.jpg",
+          "role": "supporting_identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/20260721_165154.jpg",
+          "role": "supporting_identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/20260825_175205.jpg",
+          "role": "supporting_identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/20260826_182912.jpg",
+          "role": "supporting_identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/20260826_182921.jpg",
+          "role": "supporting_identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/20260826_182929.jpg",
+          "role": "supporting_identity",
+          "source_url": "user_provided_2026-08-26"
+        },
+        {
+          "path": "benjamin_graf/source/Benjamin Graf in Talar (2).jpg",
+          "role": "talar_garment_reference",
+          "source_url": "user_provided_2026-08-26"
+        }
+      ],
+      "heroes": [
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_declaring_word_at_pulpit_v2_v1.png",
+          "variant": "declaring_word_at_pulpit_v2",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_pointing_direct_challenge_v1.png",
+          "variant": "pointing_direct_challenge",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_commanding_presence_v1.png",
+          "variant": "commanding_presence",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_highlighting_key_point_v1.png",
+          "variant": "highlighting_key_point",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_stage_zone_left_intimate_v1.png",
+          "variant": "stage_zone_left_intimate",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_stage_zone_right_declarative_v1.png",
+          "variant": "stage_zone_right_declarative",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_open_palms_offering_v1.png",
+          "variant": "open_palms_offering",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_hallelujah_celebration_v1.png",
+          "variant": "hallelujah_celebration",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_caring_leaning_in_v1.png",
+          "variant": "caring_leaning_in",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_suppressing_tears_subtle_v1.png",
+          "variant": "suppressing_tears_subtle",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_quiet_confidence_three_quarter_v1.png",
+          "variant": "quiet_confidence_three_quarter",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_profile_contemplative_v1.png",
+          "variant": "profile_contemplative",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_low_angle_authority_v1.png",
+          "variant": "low_angle_authority",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_joyful_surprise_v1.png",
+          "variant": "joyful_surprise",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_gentle_invitation_v1.png",
+          "variant": "gentle_invitation",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_quiet_prayer_eyes_closed_v1.png",
+          "variant": "quiet_prayer_eyes_closed",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_energetic_step_forward_v1.png",
+          "variant": "energetic_step_forward",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_warm_direct_eye_contact_closeup_v1.png",
+          "variant": "warm_direct_eye_contact_closeup",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_thoughtful_hand_on_heart_v1.png",
+          "variant": "thoughtful_hand_on_heart",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_pulpit_lavalier_urgent_appeal_v1.png",
+          "variant": "pulpit_lavalier_urgent_appeal",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_altar_talar_handheld_conviction_v1.png",
+          "variant": "altar_talar_handheld_conviction",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_stage_pullover_fiery_declaration_v1.png",
+          "variant": "stage_pullover_fiery_declaration",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_pulpit_talar_gooseneck_joyful_breakthrough_v1.png",
+          "variant": "pulpit_talar_gooseneck_joyful_breakthrough",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_altar_pullover_compassionate_plea_v1.png",
+          "variant": "altar_pullover_compassionate_plea",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_stage_talar_awe_wonder_arms_raised_v1.png",
+          "variant": "stage_talar_awe_wonder_arms_raised",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        },
+        {
+          "path": "benjamin_graf/heroes/benjamin_graf_ai_pulpit_pullover_energetic_warning_lean_v1.png",
+          "variant": "pulpit_pullover_energetic_warning_lean",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true
+        }
+      ]
     }
   }
 }

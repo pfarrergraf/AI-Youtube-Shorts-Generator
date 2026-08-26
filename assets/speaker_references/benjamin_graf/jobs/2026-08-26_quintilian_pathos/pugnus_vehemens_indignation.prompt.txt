@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "pugnus vehemens" (Quintilian, Institutio Oratoria XI) — the clenched fist of vehemence and righteous indignation.
+Primary request: Create Benjamin Graf in the pose archetype pugnus_vehemens_indignation.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, body proportions — but he looks somewhat OLDER than the reference photos, with a neat, groomed 3-day stubble beard and a few subtle grey strands woven into his hair, not fully grey, no eyeglasses.
+Expression: righteous urgency bordering on holy anger — never petty or cruel, but utterly unwilling to let the truth go unspoken. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed despite the grey strands. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: right hand raised to shoulder height in a tight, trembling clenched fist — the classical gesture of vehemence — clearly separated from the torso.
+Clothing: black clergy robe (Talar) with white clerical collar tabs (Beffchen), no eyeglasses. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: dramatic low-angle medium shot, shot on a 16mm ultra-wide lens; keep one clean side of the frame free for later typography.
+Lighting/mood: high-energy cinematic lighting, dramatic warm-gold and deep-red glow, ultra-sharp detail, clear contrast against the black robe.
+Color palette: charcoal-black, warm gold, deep red.
+Story compatibility: righteous urgency, a wake-up call, no more excuses.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; the raised fist must be spatially distinct from the head/torso silhouette so it can later be separated into an independent depth layer; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

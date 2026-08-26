@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Kerstin Graf in the pose archetype striding_off_the_stage_edge.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair color and length, skin tone and body proportions.
+Expression: confident, warm, direct eye contact with a slight smile.
+Gesture/movement: full body walking toward the camera down a shallow stage riser step, one foot planted on a lower step and the other mid-descent, clear forward momentum in the pose.
+Clothing: warm rust/terracotta sweater with dark trousers — not the same red top as previous references.
+Composition/framing: full body, wide enough to show the stage step and the walking motion; keep one clean side of the frame free for later typography.
+Lighting/mood: warm haze backlight from behind her, soft cool key light on her face, dark stage surroundings.
+Color palette: warm rust, amber haze, charcoal.
+Story compatibility: taking the next step, moving forward in faith, momentum.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, motion clearly implied in the pose without being blurry or distorted.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume, motion blur artifacts that distort anatomy.

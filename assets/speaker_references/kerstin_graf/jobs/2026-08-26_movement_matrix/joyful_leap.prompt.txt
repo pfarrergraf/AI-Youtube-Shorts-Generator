@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Kerstin Graf in the pose archetype joyful_leap.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair color and length, skin tone and body proportions.
+Expression: unrestrained joy, open laughing mouth, eyes bright.
+Gesture/movement: caught mid small joyful hop, one heel lifted off the ground, both arms flung outward and slightly up in celebration, hair visibly lifted by the motion.
+Clothing: bright mustard-yellow blouse with dark jeans — not the same red top as previous references.
+Composition/framing: chest-up to waist, wide enough that both arms and the lifted heel read clearly; keep one clean side of the frame free for later typography.
+Lighting/mood: warm golden stage wash from above, moody dark background, festive energy.
+Color palette: mustard yellow, warm gold, deep charcoal.
+Story compatibility: celebration, breakthrough, answered prayer, pure joy.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, motion clearly implied in the pose without being blurry or distorted.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; both raised arms must be spatially distinct from the head/torso silhouette so they can later be separated into independent depth layers.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume, motion blur artifacts that distort anatomy.

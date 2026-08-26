@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-26",
+  "speaker_key": "benjamin_graf",
+  "display_name": "Benjamin Graf",
+  "status": "generated",
+  "note": "Redo of ../2026-08-26_quintilian_pathos/ with strict identity lock (no age change, no beard/stubble, no grey hair) after the user rejected that batch as looking like 'a fictitious brother, not me'. Same 13 Quintilian gesture poses and same pathos direction, corrected identity clause only. See ../../STYLE_GUIDE.md.",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf Portrait kl.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf in red.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf sminling.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/7a8c07c0.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/graf_benjamin.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf bei CCO-Feier Hintergrund blurred.png",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf speaking.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf bei Hochzeit am Dirigieren.jpg"
+  ],
+  "jobs": [
+    {
+      "pose_id": "manus_supina_appeal",
+      "prompt_path": "manus_supina_appeal.prompt.txt",
+      "output": "benjamin_graf_manus_supina_appeal_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "digitus_index_admonition",
+      "prompt_path": "digitus_index_admonition.prompt.txt",
+      "output": "benjamin_graf_digitus_index_admonition_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "manus_prona_suppressing",
+      "prompt_path": "manus_prona_suppressing.prompt.txt",
+      "output": "benjamin_graf_manus_prona_suppressing_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "pugnus_vehemens_indignation",
+      "prompt_path": "pugnus_vehemens_indignation.prompt.txt",
+      "output": "benjamin_graf_pugnus_vehemens_indignation_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "manus_ad_pectus_oath",
+      "prompt_path": "manus_ad_pectus_oath.prompt.txt",
+      "output": "benjamin_graf_manus_ad_pectus_oath_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "utraque_manus_wonder",
+      "prompt_path": "utraque_manus_wonder.prompt.txt",
+      "output": "benjamin_graf_utraque_manus_wonder_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "manus_conjunctae_supplication",
+      "prompt_path": "manus_conjunctae_supplication.prompt.txt",
+      "output": "benjamin_graf_manus_conjunctae_supplication_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "manus_aversans_warning",
+      "prompt_path": "manus_aversans_warning.prompt.txt",
+      "output": "benjamin_graf_manus_aversans_warning_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "digiti_collecti_precision",
+      "prompt_path": "digiti_collecti_precision.prompt.txt",
+      "output": "benjamin_graf_digiti_collecti_precision_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "pugnus_in_palmam_verdict",
+      "prompt_path": "pugnus_in_palmam_verdict.prompt.txt",
+      "output": "benjamin_graf_pugnus_in_palmam_verdict_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "manus_ad_caelum_invocation",
+      "prompt_path": "manus_ad_caelum_invocation.prompt.txt",
+      "output": "benjamin_graf_manus_ad_caelum_invocation_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "manus_attrahens_gathering",
+      "prompt_path": "manus_attrahens_gathering.prompt.txt",
+      "output": "benjamin_graf_manus_attrahens_gathering_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "manus_regia_blessing",
+      "prompt_path": "manus_regia_blessing.prompt.txt",
+      "output": "benjamin_graf_manus_regia_blessing_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    }
+  ]
+}

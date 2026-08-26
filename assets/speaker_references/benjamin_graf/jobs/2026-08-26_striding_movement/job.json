@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-26",
+  "speaker_key": "benjamin_graf",
+  "display_name": "Benjamin Graf",
+  "status": "generated",
+  "note": "2 new poses with an active striding/preaching movement, not covered by any prior batch. User pasted 7 screenshots of a different real, identifiable public figure (on-screen caption read '...Furtick') as movement inspiration -- those images were deliberately NOT used as generation input/identity reference (a different real person's face must not be blended into this speaker's likeness); only the generic movement idea (striding/advancing while gesturing mid-sermon) was carried over, same treatment as the earlier 4-thumbnail-concepts inspiration. Identity clause matches the corrected 2026-08-26_quintilian_pathos_v2 standard (exact age/face/hair, no beard, no glasses). Also added 9 new genuine self-photos the user placed in source/ to manifest.json as additional identity references.",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/ (all 17 entries in manifest.json source_images)"
+  ],
+  "jobs": [
+    {
+      "pose_id": "striding_stage_command",
+      "prompt_path": "striding_stage_command.prompt.txt",
+      "output": "benjamin_graf_striding_stage_command_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "advancing_conviction_walk",
+      "prompt_path": "advancing_conviction_walk.prompt.txt",
+      "output": "benjamin_graf_advancing_conviction_walk_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    }
+  ]
+}

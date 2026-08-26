@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Kerstin Graf in the pose archetype urgent_lean_forward.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair color and length, skin tone and body proportions.
+Expression: intense, passionate urgency, brows drawn, mouth mid-word.
+Gesture/movement: leaning her whole upper body toward the camera, one hand caught mid-motion in a sharp downward chopping gesture to emphasize a point, reaching out and away from the torso.
+Clothing: dark charcoal blazer over a simple white shirt, sleeves not rolled — not the same red top as previous references.
+Composition/framing: chest-up, close and confrontational; keep one clean side of the frame free for later typography.
+Lighting/mood: crossing warm gold and cool blue beams from opposite top corners, moody dark stage background.
+Color palette: warm gold, cool blue, charcoal, white.
+Story compatibility: urgency, a wake-up call, decision now, no more excuses.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, believable handheld or lavalier microphone if natural.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; the gesturing hand must be spatially distinct from the head/torso silhouette so it can later be separated into an independent depth layer.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume.

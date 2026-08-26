@@ -951,6 +951,16 @@ def GetAllHighlights(Transcription, reference_text=None, speaker_profile_text=No
         chunks = _chunk_transcription(Transcription)
         print(f"Analyzing transcription in {len(chunks)} chunk(s) for ALL highlights...")
 
+        highlight_prompt = MULTI_HIGHLIGHT_PROMPT
+        override_path = os.getenv("HIGHLIGHT_SYSTEM_PROMPT_FILE")
+        if override_path:
+            if os.path.isfile(override_path):
+                with open(override_path, "r", encoding="utf-8") as f:
+                    highlight_prompt = f.read()
+                print(f"  Using HIGHLIGHT_SYSTEM_PROMPT_FILE override: {override_path}")
+            else:
+                print(f"  Warning: HIGHLIGHT_SYSTEM_PROMPT_FILE not found: {override_path}")
+
         all_highlights = []
 
         for i, chunk in enumerate(chunks):
@@ -976,7 +986,7 @@ def GetAllHighlights(Transcription, reference_text=None, speaker_profile_text=No
                     + "\n\n=== Transcript ===\n"
                     + (user_content if user_content is not chunk else chunk)
                 )
-            text = _call_llm(MULTI_HIGHLIGHT_PROMPT, user_content, temperature=0.5)
+            text = _call_llm(highlight_prompt, user_content, temperature=0.5)
             try:
                 parsed = _json.loads(text)
             except _json.JSONDecodeError:

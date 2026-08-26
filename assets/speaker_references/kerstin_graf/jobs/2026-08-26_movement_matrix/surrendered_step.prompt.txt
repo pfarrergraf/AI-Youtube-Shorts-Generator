@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Kerstin Graf in the pose archetype surrendered_step.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair color and length, skin tone and body proportions.
+Expression: eyes closed, peaceful surrender, faint emotional smile.
+Gesture/movement: one palm open and raised gently at chest height, caught mid-step with one foot lifted slightly forward as if stepping into the light, body leaning back a little in worship.
+Clothing: soft charcoal-grey knit top, simple and modest — not the same red top as previous references.
+Composition/framing: chest-up to waist to show the stepping motion; keep one clean side of the frame free for later typography.
+Lighting/mood: single soft warm beam from above and slightly behind, dark moody stage void, faint dust motes visible in the light shaft.
+Color palette: warm gold beam, charcoal grey, deep black.
+Story compatibility: surrender, worship, letting go, trust.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, believable handheld or lavalier microphone if natural.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume, motion blur artifacts that distort anatomy.

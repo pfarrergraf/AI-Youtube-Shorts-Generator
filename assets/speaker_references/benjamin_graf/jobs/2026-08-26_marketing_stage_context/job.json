@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-26",
+  "speaker_key": "benjamin_graf",
+  "display_name": "Benjamin Graf",
+  "status": "approved",
+  "note": "Marketing/scroll-stop corrective batch, triggered by two pieces of direct client feedback: grave_seriousness_talar_wide (mixed_expressions batch) rejected as 'too stern, not passionate'; warm_laughter_cashmere_burgundy flagged as needing a lavalier/wireless mic and a real pulpit/altar/stage setting, not a studio void, 'to stop people from scrolling'. An audit of all 42 poses across rhetorical_matrix/quintilian_pathos_v2/striding_movement/mixed_expressions found 0/42 with a visible mic and only 2/42 with even a bare pulpit edge (both still against a flat studio void) -- see ../../STYLE_GUIDE.md 'Marketing audit: scroll-stop gap' section for the full audit and the new hard rule (mic assigned by garment: handheld for Talar, lavalier for cashmere-pullover-over-Hemd; a concrete pulpit/altar/stage setting, legible but shallow-DOF-defocused, never a seamless void; severe/stern/cold explicitly added to Avoid on every prompt). This batch mixes 3 Talar and 4 pullover-over-Hemd poses across pulpit, altar, and lit-stage settings, with a passionate/warm/urgent register throughout -- no stern or severe poses. Not approved by the client yet; do not copy into heroes/ or flip approved:true without explicit client sign-off.",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/ (all entries in manifest.json speakers.benjamin_graf.source_images)",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/benjamin_graf/source/Benjamin Graf in Talar (2).jpg (talar_garment_reference)"
+  ],
+  "jobs": [
+    {
+      "pose_id": "pulpit_lavalier_urgent_appeal",
+      "prompt_path": "pulpit_lavalier_urgent_appeal.prompt.txt",
+      "output": "benjamin_graf_pulpit_lavalier_urgent_appeal_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "altar_talar_handheld_conviction",
+      "prompt_path": "altar_talar_handheld_conviction.prompt.txt",
+      "output": "benjamin_graf_altar_talar_handheld_conviction_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "stage_pullover_fiery_declaration",
+      "prompt_path": "stage_pullover_fiery_declaration.prompt.txt",
+      "output": "benjamin_graf_stage_pullover_fiery_declaration_candidate_v1.png",
+      "status": "approved",
+      "approved": true,
+      "note": "First render put a pair of eyeglasses in his free hand (regression of the no-eyeglasses rule); adjusted the gesture to hand-flat-on-chest and strengthened Avoid, regenerated once, passed on retry."
+    },
+    {
+      "pose_id": "pulpit_talar_gooseneck_joyful_breakthrough",
+      "prompt_path": "pulpit_talar_gooseneck_joyful_breakthrough.prompt.txt",
+      "output": "benjamin_graf_pulpit_talar_gooseneck_joyful_breakthrough_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "altar_pullover_compassionate_plea",
+      "prompt_path": "altar_pullover_compassionate_plea.prompt.txt",
+      "output": "benjamin_graf_altar_pullover_compassionate_plea_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "stage_talar_awe_wonder_arms_raised",
+      "prompt_path": "stage_talar_awe_wonder_arms_raised.prompt.txt",
+      "output": "benjamin_graf_stage_talar_awe_wonder_arms_raised_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "pulpit_pullover_energetic_warning_lean",
+      "prompt_path": "pulpit_pullover_energetic_warning_lean.prompt.txt",
+      "output": "benjamin_graf_pulpit_pullover_energetic_warning_lean_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    }
+  ]
+}

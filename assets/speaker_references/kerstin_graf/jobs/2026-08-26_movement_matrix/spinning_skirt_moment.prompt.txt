@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Kerstin Graf in the pose archetype spinning_skirt_moment.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair color and length, skin tone and body proportions.
+Expression: joyful, laughing, caught mid-motion.
+Gesture/movement: caught mid small spin/twirl, the hem of her dress visibly flaring outward with motion, arms held slightly out from the body for balance, hair swinging with the turn.
+Clothing: a flowing dusty-rose or muted burgundy midi dress, modest cut — distinct from the earlier solid red top.
+Composition/framing: full body to show the flaring hem and the turning motion; keep one clean side of the frame free for later typography.
+Lighting/mood: warm honey-gold stage wash, soft haze, moody dark surroundings.
+Color palette: dusty rose, warm honey gold, deep charcoal.
+Story compatibility: freedom, joy, dancing before God, celebration.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands, motion clearly implied in the pose and fabric without being blurry or distorted.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume, motion blur artifacts that distort anatomy.

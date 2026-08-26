@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "digitus index" (Quintilian, Institutio Oratoria XI) — the raised index finger of admonition.
+Primary request: Create Benjamin Graf in the pose archetype digitus_index_admonition.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, body proportions — but he looks somewhat OLDER than the reference photos, with a neat, groomed 3-day stubble beard and a few subtle grey strands woven into his hair, not fully grey, no eyeglasses.
+Expression: piercing, urgent, prophetic warning — not angry, but utterly convinced, as if the fate of the listener hangs on this one sentence. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed despite the grey strands. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: right hand raised beside his head, index finger extended and pointed sharply upward — the classical gesture of admonition — the rest of the hand loosely closed, clearly separated from the torso.
+Clothing: black clergy robe (Talar) with white clerical collar tabs (Beffchen), no eyeglasses. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: dramatic low-angle medium shot, shot on a 16mm ultra-wide lens creating forced perspective on the raised hand; keep one clean side of the frame free for later typography.
+Lighting/mood: high-energy cinematic lighting, vibrant dramatic orange and deep red glow from a modern church altar behind him, sharp ultra-detailed contrast against the black robe.
+Color palette: charcoal-black, deep red, vibrant orange.
+Story compatibility: urgent warning, a defining moment, the truth that cannot be ignored.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; the raised arm must be spatially distinct from the head/torso silhouette so it can later be separated into an independent depth layer; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

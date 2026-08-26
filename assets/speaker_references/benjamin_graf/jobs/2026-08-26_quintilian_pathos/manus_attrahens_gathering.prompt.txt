@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "manus attrahens" (Quintilian, Institutio Oratoria XI) — the gathering hand that pulls the listener into the moment.
+Primary request: Create Benjamin Graf in the pose archetype manus_attrahens_gathering.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, body proportions — but he looks somewhat OLDER than the reference photos, with a neat, groomed 3-day stubble beard and a few subtle grey strands woven into his hair, not fully grey, no eyeglasses.
+Expression: intensely personal, as if speaking to one single listener across the whole room, drawing them into an urgent secret they must hear. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed despite the grey strands. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: right hand curled and drawn back toward his own chest, fingers slightly cupped as if physically pulling the viewer closer — the classical gathering gesture — leaning his whole upper body toward the camera.
+Clothing: light-blue fine-knit cashmere crew-neck pullover over a white dress shirt, collar visible. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: tight chest-up, close and intimate, shot on an 85mm portrait lens at f/1.4; keep one clean side of the frame free for later typography.
+Lighting/mood: soft warm intimate side light, background a muted warm taupe falling into soft blur, clear contrast against the light-blue pullover.
+Color palette: light blue, white, warm taupe.
+Story compatibility: an intimate, urgent secret, "come closer, I have to tell you this."
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; the gesturing hand must be spatially distinct from the head/torso silhouette so it can later be separated into an independent depth layer; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

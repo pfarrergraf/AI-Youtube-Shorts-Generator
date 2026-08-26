@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype passionate_open_arms.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, glasses if present, hair, skin tone and body proportions.
+Expression: big genuine laugh, head tilted slightly back, eyes crinkled with joy.
+Gesture: both arms swept wide open away from the torso as if inviting the whole room in, torso turned slightly to one side mid-motion.
+Clothing: light denim jacket open over a simple grey t-shirt.
+Composition/framing: chest-up to waist, wide enough that both open arms are visible and clearly separated from the torso silhouette; rule of thirds; keep one clean side of the frame free for later typography.
+Lighting/mood: crossing warm gold and cool blue stage beams from opposite top corners, moody dark background.
+Color palette: warm gold, cool blue, denim indigo.
+Story compatibility: welcome, belonging, celebration, God's love has room for everyone.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; both raised arms must be spatially distinct from the head/torso silhouette so they can later be separated into independent depth layers.
+Avoid: written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, costume.

@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "manus regia" (Quintilian, Institutio Oratoria XI) — the raised open palm of authoritative blessing and command.
+Primary request: Create Benjamin Graf in the pose archetype manus_regia_blessing.
+Input images: all supplied images are strict identity references; match his exact current age, exact face shape, exact skin, exact clean-shaven look (no beard, no stubble) and exact natural hair color (no grey) precisely as shown in the reference photos — the only permitted deviation from the references is removing eyeglasses. This must look unmistakably like the same real person in the reference photos, not a similar-looking stranger or relative.
+Expression: calm, immense authority — the eye of the storm after intensity, a settled, unshakeable conviction that carries more weight than shouting ever could. Skin tone healthy, warm, sun-kissed golden undertone. Hair styled exactly as in the reference photos, natural color, no grey. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: right hand raised to shoulder height, palm facing outward toward the viewer in a gesture of blessing and command at once — the classical "manus regia" — clearly separated from the torso.
+Clothing: black clergy robe (Talar) with white clerical collar tabs (Beffchen), no eyeglasses. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: chest-up, shot on an 85mm portrait lens at f/1.8; keep one clean side of the frame free for later typography.
+Lighting/mood: warm directional key light with a soft cool ambient fill, background a warm mid-grey, clear contrast against the black robe.
+Color palette: charcoal-black, warm gold, soft grey.
+Story compatibility: settled conviction, the final word, peace that carries authority.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; the raised hand must be spatially distinct from the head/torso silhouette so it can later be separated into an independent depth layer; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "manus ad pectus" (Quintilian, Institutio Oratoria XI) — the hand pressed to the breast, the orator's personal oath and testimony.
+Primary request: Create Benjamin Graf in the pose archetype manus_ad_pectus_oath.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, body proportions — but he looks somewhat OLDER than the reference photos, with a neat, groomed 3-day stubble beard and a few subtle grey strands woven into his hair, not fully grey, no eyeglasses.
+Expression: raw sincerity, eyes glistening, as if staking his own life on the truth of what he says — "I have to tell you this." Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed despite the grey strands. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: right hand pressed firmly flat against his own chest/heart, fingers spread, knuckles slightly whitened with the pressure of the gesture — the classical oath gesture.
+Clothing: burgundy fine-knit cashmere crew-neck pullover over a white dress shirt, collar visible. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: tight chest-up, shot on an 85mm portrait lens at f/1.4, razor-sharp focus on his eyes and hand; keep one clean side of the frame free for later typography.
+Lighting/mood: soft warm intimate side light, background a deep warm charcoal falling into soft blur, clear contrast against the burgundy pullover.
+Color palette: burgundy, white, warm charcoal.
+Story compatibility: personal testimony, a solemn vow, speaking from the heart with everything on the line.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

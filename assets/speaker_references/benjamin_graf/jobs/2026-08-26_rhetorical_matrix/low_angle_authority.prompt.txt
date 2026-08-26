@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype low_angle_authority.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair, body proportions — no eyeglasses.
+Expression: firm, grounded, gazing slightly down toward the camera with quiet gravitas, no eyeglasses. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed, a deliberate cut. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy) — someone people are drawn to follow; this pose leads directly with that authority.
+Gesture: shot from a slightly low camera angle looking up at him, one hand resting on the edge of a pulpit or lectern just entering frame at the bottom.
+Clothing: black clergy robe (Talar) with white clerical collar tabs (Beffchen), no eyeglasses. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: chest-up, camera angled slightly upward toward him for a subtle heroic/authoritative perspective; keep one clean side of the frame free for later typography.
+Lighting/mood: strong warm key light from above and slightly behind, background a deep warm-grey sky-like gradient that contrasts against the black robe.
+Color palette: charcoal-black, warm gold, muted sky grey.
+Story compatibility: authority, gravitas, a leader people look up to.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim.

@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate.
+Primary request: Create Benjamin Graf in the pose archetype commanding_presence.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, age, hair, body proportions — no eyeglasses.
+Expression: firm, grounded authority, chin level, steady gaze, no eyeglasses. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed, a deliberate cut. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy) — someone people are drawn to follow, calibrated to this pose's specific emotion.
+Gesture: both feet planted, chest open, one arm raised to shoulder height with an open, commanding palm, clearly separated from the torso.
+Clothing: navy fine-knit cashmere crew-neck pullover over a white dress shirt with a subtle dark contrast trim on the collar and cuffs, collar visible at the neckline. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: chest-up to waist; rule of thirds; keep one clean side of the frame free for later typography.
+Lighting/mood: strong single warm key light from one side, moody but not black backdrop — a deep warm-brown background that gives clear contrast against the navy pullover.
+Color palette: navy, warm brown, white.
+Story compatibility: authority, standing firm, leadership, taking ground.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple, uncluttered background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; the raised arm must be spatially distinct from the head/torso silhouette so it can later be separated into an independent depth layer; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim.

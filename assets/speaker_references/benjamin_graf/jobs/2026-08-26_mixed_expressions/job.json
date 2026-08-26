@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-26",
+  "speaker_key": "benjamin_graf",
+  "display_name": "Benjamin Graf",
+  "status": "generated",
+  "note": "First batch using the corrected Talar garment description (see ../../STYLE_GUIDE.md) after the user supplied a real reference photo. Mixes clothing (4 Talar, 4 cashmere-pullover-over-Hemd) and expressions (resolute, warm laughter, stern challenge, tender compassion, amused smirk, grave seriousness, delighted realization, somber reflection) not covered by prior batches, per the user's explicit request to 'mix the type of clothes style and expressions'.",
+  "references": [
+    "all 18 entries in manifest.json speakers.benjamin_graf.source_images"
+  ],
+  "jobs": [
+    {
+      "pose_id": "resolute_side_profile_talar",
+      "prompt_path": "resolute_side_profile_talar.prompt.txt",
+      "output": "benjamin_graf_resolute_side_profile_talar_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "warm_laughter_cashmere_burgundy",
+      "prompt_path": "warm_laughter_cashmere_burgundy.prompt.txt",
+      "output": "benjamin_graf_warm_laughter_cashmere_burgundy_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "stern_challenge_talar_closeup",
+      "prompt_path": "stern_challenge_talar_closeup.prompt.txt",
+      "output": "benjamin_graf_stern_challenge_talar_closeup_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "tender_compassion_cashmere_grey",
+      "prompt_path": "tender_compassion_cashmere_grey.prompt.txt",
+      "output": "benjamin_graf_tender_compassion_cashmere_grey_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "amused_smirk_casual_pullover",
+      "prompt_path": "amused_smirk_casual_pullover.prompt.txt",
+      "output": "benjamin_graf_amused_smirk_casual_pullover_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "grave_seriousness_talar_wide",
+      "prompt_path": "grave_seriousness_talar_wide.prompt.txt",
+      "output": "benjamin_graf_grave_seriousness_talar_wide_candidate_v1.png",
+      "status": "rejected",
+      "approved": false,
+      "rejection_reason": "Reads as stern/severe, not passionate -- wrong emotional register for the brand ('we want to catch people with passion, not strictness and severeness')."
+    },
+    {
+      "pose_id": "delighted_realization_cashmere_teal",
+      "prompt_path": "delighted_realization_cashmere_teal.prompt.txt",
+      "output": "benjamin_graf_delighted_realization_cashmere_teal_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    },
+    {
+      "pose_id": "somber_reflection_talar_shadow",
+      "prompt_path": "somber_reflection_talar_shadow.prompt.txt",
+      "output": "benjamin_graf_somber_reflection_talar_shadow_candidate_v1.png",
+      "status": "generated",
+      "approved": false
+    }
+  ]
+}

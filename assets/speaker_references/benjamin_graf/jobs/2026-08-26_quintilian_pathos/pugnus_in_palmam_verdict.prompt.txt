@@ -1,0 +1,14 @@
+Use case: identity-preserve.
+Asset type: reusable text-free 9:16 sermon speaker pose candidate, named for the classical rhetorical gesture "pugnus in palmam" (Quintilian, Institutio Oratoria XI) — the fist striking the open palm at the decisive verdict.
+Primary request: Create Benjamin Graf in the pose archetype pugnus_in_palmam_verdict.
+Input images: all supplied images are strict identity references; preserve the same recognizable face, body proportions — but he looks somewhat OLDER than the reference photos, with a neat, groomed 3-day stubble beard and a few subtle grey strands woven into his hair, not fully grey, no eyeglasses.
+Expression: fierce, resolute, the exact instant of a decisive conclusion — no doubt left in his face. Skin tone healthy, warm, sun-kissed golden undertone. Hair neatly styled and groomed despite the grey strands. Overall persona: a strong, visionary, commanding preacher with apostolic gravitas (Paul the Apostle energy).
+Gesture: right fist caught at the exact moment of striking his open left palm at chest height — the classical gesture marking a decisive verdict — both hands clearly separated from the torso.
+Clothing: black clergy robe (Talar) with white clerical collar tabs (Beffchen), no eyeglasses. All clothing crisp, freshly pressed, completely free of wrinkles or creases.
+Composition/framing: dramatic low-angle medium shot, shot on a 16mm ultra-wide lens for forced perspective on the hands; keep one clean side of the frame free for later typography.
+Lighting/mood: high-energy cinematic lighting, dramatic warm-gold glow, ultra-sharp detail, clear contrast against the black robe.
+Color palette: charcoal-black, warm gold.
+Story compatibility: the decisive moment, the verdict is in, this is the truth.
+Style/medium: photorealistic editorial portrait, cinematic depth, realistic skin, anatomically correct hands.
+Constraints: exactly one speaker; text-free; simple background suitable for later background/foreground layer compositing; light direction must be visually explicit and physically coherent; both hands must be spatially distinct from the head/torso silhouette so they can later be separated into independent depth layers; clothing must read with clear contrast against the background.
+Avoid: eyeglasses, written words, captions, lettering, logo, watermark, lower third, audience, second person, duplicated limbs, deformed hands, synthetic plastic skin, halo, wings, jacket, blazer, denim, hoodie, t-shirt.

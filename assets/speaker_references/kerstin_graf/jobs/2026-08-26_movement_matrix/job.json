@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-26",
+  "speaker_key": "kerstin_graf",
+  "display_name": "Kerstin Graf",
+  "status": "generated",
+  "note": "Movement/wardrobe-varied batch, requested after joyful_proclamation (pose_matrix batch) was flagged as too bright. References studied for movement/setting: thomas_herrmann/heroes (gold_teal, doorway_calling), leo_bigger_icf/heroes (joyful_breakthrough, point_to_heaven, prayerful_surrender), antonio_weil/heroes/blue_mic.",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/csm_EV_KG_OL__121_von_177__58ad899f10.webp",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/d5787f01.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/f605fa82.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/6c36c1c1.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/WhatsApp Image 2026-08-26 at 12.11.57.jpeg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kerstin_graf/source/kerstin_graf_stage_gesture_v1.jpg"
+  ],
+  "jobs": [
+    {
+      "pose_id": "walking_the_word",
+      "prompt_path": "walking_the_word.prompt.txt",
+      "output": "kerstin_graf_walking_the_word_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "open_embrace_sweep",
+      "prompt_path": "open_embrace_sweep.prompt.txt",
+      "output": "kerstin_graf_open_embrace_sweep_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "finger_to_heaven",
+      "prompt_path": "finger_to_heaven.prompt.txt",
+      "output": "kerstin_graf_finger_to_heaven_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "surrendered_step",
+      "prompt_path": "surrendered_step.prompt.txt",
+      "output": "kerstin_graf_surrendered_step_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "turning_mid_word",
+      "prompt_path": "turning_mid_word.prompt.txt",
+      "output": "kerstin_graf_turning_mid_word_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "striding_off_the_stage_edge",
+      "prompt_path": "striding_off_the_stage_edge.prompt.txt",
+      "output": "kerstin_graf_striding_off_the_stage_edge_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "joyful_leap",
+      "prompt_path": "joyful_leap.prompt.txt",
+      "output": "kerstin_graf_joyful_leap_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "urgent_lean_forward",
+      "prompt_path": "urgent_lean_forward.prompt.txt",
+      "output": "kerstin_graf_urgent_lean_forward_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    },
+    {
+      "pose_id": "spinning_skirt_moment",
+      "prompt_path": "spinning_skirt_moment.prompt.txt",
+      "output": "kerstin_graf_spinning_skirt_moment_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    },
+    {
+      "pose_id": "kneeling_rising_prayer",
+      "prompt_path": "kneeling_rising_prayer.prompt.txt",
+      "output": "kerstin_graf_kneeling_rising_prayer_candidate_v1.png",
+      "status": "rejected",
+      "approved": false
+    },
+    {
+      "pose_id": "calling_out_close",
+      "prompt_path": "calling_out_close.prompt.txt",
+      "output": "kerstin_graf_calling_out_close_candidate_v1.png",
+      "status": "approved",
+      "approved": true
+    }
+  ]
+}
