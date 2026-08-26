@@ -368,6 +368,31 @@ def frame_subject(
     return cropped.crop(bbox) if bbox else cropped
 
 
+def _speaker_placement_geometry(
+    canvas_size: tuple[int, int],
+    subject_size: tuple[int, int],
+    *,
+    target_height_ratio: float,
+    anchor_x: float,
+    bottom_ratio: float,
+) -> tuple[int, int, int, float]:
+    """Where a subject cutout lands on canvas, before any pixels are touched.
+
+    Pure geometry (no canvas content, no resampling) so callers can learn the
+    speaker's future footprint — in particular the face band — before deciding
+    what else to composite underneath it.
+    """
+    w, h = canvas_size
+    subject_w, subject_h = subject_size
+    target_h = int(h * target_height_ratio)
+    scale = target_h / max(1, subject_h)
+    scaled_w = max(1, int(subject_w * scale))
+    scaled_h = max(1, int(subject_h * scale))
+    x = int(anchor_x * w - scaled_w / 2)
+    y = int(bottom_ratio * h - scaled_h)
+    return x, y, scaled_w, scale
+
+
 def place_speaker(
     canvas: Image.Image,
     subject_rgba: Image.Image,
@@ -381,16 +406,19 @@ def place_speaker(
     """Composite the cutout, bottom-anchored. Returns canvas, box, placed alpha."""
     w, h = canvas.size
     subject = subject_rgba.convert("RGBA")
-    target_h = int(h * target_height_ratio)
-    scale = target_h / max(1, subject.height)
+    x, y, scaled_w, scale = _speaker_placement_geometry(
+        (w, h),
+        subject.size,
+        target_height_ratio=target_height_ratio,
+        anchor_x=anchor_x,
+        bottom_ratio=bottom_ratio,
+    )
     subject = subject.resize(
-        (max(1, int(subject.width * scale)), max(1, int(subject.height * scale))), Image.LANCZOS
+        (scaled_w, max(1, int(subject.height * scale))), Image.LANCZOS
     )
     if rim:
         subject = atmo.rim_light_from_alpha(subject, color=mood["light"], width=max(3, w // 260))
 
-    x = int(anchor_x * w - subject.width / 2)
-    y = int(bottom_ratio * h - subject.height)
     out = canvas.convert("RGBA")
     out.alpha_composite(subject, (x, y))
 
@@ -498,16 +526,13 @@ def compose(
         seed=seed,
     )
 
-    # The upper title lines can sit behind the speaker in the top-title layout.
-    # With a lower title block the speaker is deliberately above the type, so
-    # every line must remain readable instead of disappearing into the torso.
-    split = 0 if text_anchor != "top" else max(1, len(type_layout.lines) - 1)
-    back_layer, front_layer = _split_type_layer(type_layout, split)
-
-    canvas = Image.alpha_composite(canvas.convert("RGBA"), back_layer).convert("RGB")
-
-    subject_box = None
-    placed_alpha = None
+    # Learn where the speaker's face will land on canvas *before* compositing
+    # anything, so the title split can be decided by real face geometry
+    # instead of an anchor-only guess. The face — never the rest of the title
+    # block — is what must always end up in front.
+    framed = None
+    canvas_face_band = None
+    speaker_placement = None
     if subject_rgba is not None:
         framed = frame_subject(
             subject_rgba,
@@ -525,12 +550,39 @@ def compose(
             if speaker_bottom_ratio is not None
             else (0.86 if text_anchor != "top" else 1.0)
         )
+        anchor_x = float(story_layers["speaker_anchor_x"] or 0.5)
+        speaker_placement = (target_height, bottom_ratio, anchor_x)
+        sx, sy, _, scale = _speaker_placement_geometry(
+            size,
+            framed.size,
+            target_height_ratio=target_height,
+            anchor_x=anchor_x,
+            bottom_ratio=bottom_ratio,
+        )
+        if subject_face_box is not None:
+            _, fy, _, fh = subject_face_box
+            canvas_face_band = (sy + fy * scale, sy + (fy + fh) * scale)
+
+    back_flags = _face_aware_back_flags(
+        type_layout.lines,
+        text_anchor=text_anchor,
+        canvas_face_band=canvas_face_band,
+        margin_px=max(4, h // 200),
+    )
+    back_layer, front_layer = _split_type_layer(type_layout, back_flags)
+
+    canvas = Image.alpha_composite(canvas.convert("RGBA"), back_layer).convert("RGB")
+
+    subject_box = None
+    placed_alpha = None
+    if framed is not None and speaker_placement is not None:
+        target_height, bottom_ratio, anchor_x = speaker_placement
         canvas, subject_box, placed_alpha = place_speaker(
             canvas,
             framed,
             mood=recipe,
             target_height_ratio=target_height,
-            anchor_x=float(story_layers["speaker_anchor_x"] or 0.5),
+            anchor_x=anchor_x,
             bottom_ratio=bottom_ratio,
         )
 
@@ -594,22 +646,63 @@ def compose(
     )
 
 
-def _split_type_layer(layout: TypeLayout, split: int) -> tuple[Image.Image, Image.Image]:
-    """Cut the rendered type layer into back (above) and front (below) halves."""
-    if split >= len(layout.lines):
-        empty = Image.new("RGBA", layout.image.size, (0, 0, 0, 0))
-        return layout.image, empty
+def _split_type_layer(layout: TypeLayout, back_flags: list[bool]) -> tuple[Image.Image, Image.Image]:
+    """Cut the rendered type layer into a back and a front image, per line.
 
-    boundary = layout.lines[split].box[1]
-    back = layout.image.copy()
-    front = layout.image.copy()
+    ``back_flags[i]`` says whether line ``i`` is drawn to the back image
+    (composited *before* the speaker, so the speaker paints over it) or the
+    front image (composited *after*, so the line stays fully visible). Unlike
+    a single top/bottom boundary, this allows any subset of lines — in
+    particular exactly the lines that overlap the speaker's face — to sit
+    behind, regardless of anchor.
+    """
     w, h = layout.image.size
-
-    clear = Image.new("RGBA", (w, max(0, h - boundary)), (0, 0, 0, 0))
-    back.paste(clear, (0, boundary))
-    clear_top = Image.new("RGBA", (w, boundary), (0, 0, 0, 0))
-    front.paste(clear_top, (0, 0))
+    back = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    front = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    for line, is_back in zip(layout.lines, back_flags):
+        x1, y1, x2, y2 = line.box
+        y1, y2 = max(0, y1), min(h, y2)
+        if y2 <= y1:
+            continue
+        strip = layout.image.crop((0, y1, w, y2))
+        (back if is_back else front).paste(strip, (0, y1))
     return back, front
+
+
+def _face_aware_back_flags(
+    lines,
+    *,
+    text_anchor: str,
+    canvas_face_band: tuple[int, int] | None,
+    margin_px: int = 0,
+) -> list[bool]:
+    """Decide, per title line, whether the speaker's face should sit in front of it.
+
+    With a known face band (the speaker's face position on canvas, computed
+    *before* the speaker is pasted — see ``_speaker_placement_geometry``), a
+    line goes behind the speaker exactly when it vertically overlaps that
+    band. This is what lets a title legitimately run partially behind the
+    head instead of covering it: only the overlapping line(s) move back,
+    every other line stays in front and fully readable.
+
+    Falls back to the previous anchor-only heuristic when no face band is
+    known (e.g. an AI-plate render with no real subject cutout to measure).
+    """
+    if canvas_face_band is not None:
+        face_top, face_bottom = canvas_face_band
+        face_top -= margin_px
+        face_bottom += margin_px
+        return [
+            not (line.box[3] <= face_top or line.box[1] >= face_bottom)
+            for line in lines
+        ]
+    # Old anchor-based fallback: for a low title block the speaker stands
+    # deliberately above the type (no known face position to protect), for a
+    # top-anchored block all but the last line may sit behind.
+    if text_anchor != "top":
+        return [False] * len(lines)
+    split = max(1, len(lines) - 1)
+    return [i < split for i in range(len(lines))]
 
 
 def save(result: EpicResult, path: str | Path) -> Path:

@@ -7,7 +7,8 @@
       "interior_padding_px": 24,
       "caption_anchor": {"x": 462, "y": 1160},
       "max_base_caption_width": 630,
-      "notes": "Anchor and width stay inside the lower Instagram-safe region even at Balloon's 124% peak, including outline and blur allowance."
+      "isolated_word_safe_width": 822,
+      "notes": "max_base_caption_width is deliberately conservative for a full multi-word phrase at rest so it still peaks safely at Balloon's 124%. isolated_word_safe_width is the real measured safe corridor at the anchor row (eroded by interior_padding_px, symmetric around caption_anchor.x: left=51/right=874 at the reference canvas) — for a single unbreakable token with no line-mates (an oversized German compound, or a solo word), which does not need the multi-word margin and can use the real bound directly."
     }
   }
 }

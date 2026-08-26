@@ -1,4 +1,5 @@
 import os
+import math
 import subprocess
 from typing import Any
 
@@ -37,6 +38,15 @@ SFX_TYPES = {
     "punch": [
         "mixkit-martial-arts-fast-punch-2047.wav",
     ],
+    # Caption-keyed sound design. Deliberately dry, short samples: a caption
+    # accent has to register under leveled speech without becoming a rhythm
+    # section of its own.
+    "caption_click": [
+        "caption-soft-click.wav",
+    ],
+    "caption_type": [
+        "caption-type-tick.wav",
+    ],
 }
 
 EVENT_TO_SFX = {
@@ -54,10 +64,18 @@ EVENT_TO_SFX = {
     "title_to_video_transition": "vacuum_transition",
     "lower_third_in": "whoosh_soft",
     "lower_third_out": "whoosh_soft",
+    "caption_accent": "caption_click",
+    "caption_letter": "caption_type",
 }
 
 SFX_BEHAVIOR = {
-    "pop": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 80, "trim_ms": 220},
+    "pop": {
+        "offset_ms": 0,
+        "source_start_ms": 380,
+        "fade_in_ms": 5,
+        "fade_out_ms": 80,
+        "trim_ms": 380,
+    },
     "click": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 60, "trim_ms": 180},
     "whoosh_soft": {"offset_ms": -40, "fade_in_ms": 5, "fade_out_ms": 120, "trim_ms": 550},
     "whoosh_strong": {"offset_ms": -60, "fade_in_ms": 5, "fade_out_ms": 140, "trim_ms": 800},
@@ -68,6 +86,8 @@ SFX_BEHAVIOR = {
     "impact_soft": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 180, "trim_ms": 700},
     "impact_strong": {"offset_ms": 0, "fade_in_ms": 0, "fade_out_ms": 220, "trim_ms": 1000},
     "punch": {"offset_ms": -10, "fade_in_ms": 0, "fade_out_ms": 120, "trim_ms": 400},
+    "caption_click": {"offset_ms": -20, "fade_in_ms": 0, "fade_out_ms": 40, "trim_ms": 130},
+    "caption_type": {"offset_ms": -15, "fade_in_ms": 0, "fade_out_ms": 25, "trim_ms": 70},
 }
 
 SFX_GAIN = {
@@ -82,6 +102,22 @@ SFX_GAIN = {
     "impact_soft": -14.0,
     "impact_strong": -11.0,
     "punch": -14.0,
+    # Speech is leveled to -14 LUFS, so a caption tick only ever sits in the
+    # -15..-30 dB range referenced by the reference edits — loud enough to be
+    # felt on a phone speaker, quiet enough to stay out of the way.
+    "caption_click": -22.0,
+    "caption_type": -26.0,
+}
+
+STRENGTH_GAIN_ADJUST_DB = {
+    "soft": -8.0,
+    "medium": -6.0,
+    "strong": -4.0,
+}
+
+CAPTION_EVENT_GAIN_CAP_DB = {
+    "keyword_pop": -20.0,
+    "emphasis": -18.0,
 }
 
 SFX_PROFILE_OVERRIDES = {
@@ -108,6 +144,16 @@ SFX_PROFILE_OVERRIDES = {
             "title_to_video_transition",
             "lower_third_in",
             "lower_third_out",
+        },
+        "gain_adjust_db": 0.0,
+    },
+    # Caption sound design only. The accessible profile mutes the whoosh/impact
+    # family because it masks speech at -14 dB; a caption tick at -22/-26 dB
+    # does not, so it may run there — but nothing else may come with it.
+    "caption_only": {
+        "enabled_events": {
+            "caption_accent",
+            "caption_letter",
         },
         "gain_adjust_db": 0.0,
     },
@@ -145,6 +191,10 @@ EVENT_COOLDOWNS_SEC = {
     "title_to_video_transition": 3.0,
     "lower_third_in": 2.0,
     "lower_third_out": 2.0,
+    # A caption accent that fires on every punch word turns into a metronome;
+    # the letter tick only ever runs inside a word-by-word passage.
+    "caption_accent": 1.2,
+    "caption_letter": 0.2,
 }
 
 # Per-event gain overrides (dB). Takes precedence over SFX_GAIN for the
@@ -213,7 +263,11 @@ def _is_event_enabled(event_name: str, profile: str) -> bool:
     return event_name in enabled
 
 
-def _get_effective_gain_db(event_name: str, profile: str) -> float:
+def _get_effective_gain_db(
+    event_name: str,
+    profile: str,
+    strength: str | None = None,
+) -> float:
     # Per-event override takes precedence (e.g. lower_third_in at -7dB)
     if event_name in EVENT_GAIN_OVERRIDE:
         base_gain = EVENT_GAIN_OVERRIDE[event_name]
@@ -221,7 +275,11 @@ def _get_effective_gain_db(event_name: str, profile: str) -> float:
         sfx_type = EVENT_TO_SFX[event_name]
         base_gain = SFX_GAIN.get(sfx_type, -18.0)
     profile_adjust = float(_get_profile_config(profile).get("gain_adjust_db", 0.0))
-    return base_gain + profile_adjust
+    strength_adjust = STRENGTH_GAIN_ADJUST_DB.get(strength, 0.0)
+    gain_db = base_gain + profile_adjust + strength_adjust
+    if strength is not None and event_name in CAPTION_EVENT_GAIN_CAP_DB:
+        gain_db = min(gain_db, CAPTION_EVENT_GAIN_CAP_DB[event_name])
+    return gain_db
 
 
 def _get_behavior(event_name: str) -> dict[str, int]:
@@ -241,10 +299,37 @@ def _normalize_event(raw_event: dict[str, Any]) -> dict[str, Any] | None:
     if time_sec is None:
         return None
 
+    if isinstance(time_sec, bool) or not isinstance(time_sec, (int, float)):
+        raise ValueError("time_sec must be a finite number >= 0")
+    time_sec = float(time_sec)
+    if not math.isfinite(time_sec) or time_sec < 0:
+        raise ValueError("time_sec must be a finite number >= 0")
+
+    strength = raw_event.get("strength")
+    if strength is not None and (
+        not isinstance(strength, str) or strength not in STRENGTH_GAIN_ADJUST_DB
+    ):
+        raise ValueError("strength must be one of: soft, medium, strong")
+
+    source_start_ms = raw_event.get("source_start_ms")
+    if source_start_ms is not None:
+        if isinstance(source_start_ms, bool) or not isinstance(source_start_ms, int):
+            raise ValueError("source_start_ms must be an integer >= 0")
+        if source_start_ms < 0:
+            raise ValueError("source_start_ms must be an integer >= 0")
+
+    cooldown_group = raw_event.get("cooldown_group")
+    if cooldown_group is not None:
+        if not isinstance(cooldown_group, str) or not cooldown_group.strip():
+            raise ValueError("cooldown_group must be a non-empty string")
+        cooldown_group = cooldown_group.strip()
+
     return {
         "event": event_name,
-        "time_sec": float(time_sec),
-        "strength": raw_event.get("strength"),
+        "time_sec": time_sec,
+        "strength": strength,
+        "source_start_ms": source_start_ms,
+        "cooldown_group": cooldown_group,
         "meta": raw_event.get("meta", {}),
     }
 
@@ -278,7 +363,7 @@ def build_sfx_events(
 
     normalized.sort(key=lambda x: x["time_sec"])
 
-    last_trigger_time_by_event: dict[str, float] = {}
+    last_trigger_by_cooldown_key: dict[str, tuple[float, float]] = {}
     built: list[dict[str, Any]] = []
 
     for item in normalized:
@@ -289,8 +374,9 @@ def build_sfx_events(
             continue
 
         cooldown = EVENT_COOLDOWNS_SEC.get(event_name, 0.0)
-        last_time = last_trigger_time_by_event.get(event_name)
-        if last_time is not None and (time_sec - last_time) < cooldown:
+        cooldown_key = item["cooldown_group"] or event_name
+        previous = last_trigger_by_cooldown_key.get(cooldown_key)
+        if previous is not None and (time_sec - previous[0]) < max(previous[1], cooldown):
             continue
 
         sfx_path = resolve_sfx_path(event_name, sfx_dir)
@@ -301,6 +387,9 @@ def build_sfx_events(
         behavior = _get_behavior(event_name)
         offset_ms = int(behavior.get("offset_ms", 0))
         start_ms = max(0, int(round(time_sec * 1000.0)) + offset_ms)
+        source_start_ms = item["source_start_ms"]
+        if source_start_ms is None:
+            source_start_ms = int(behavior.get("source_start_ms", 0))
 
         built.append(
             {
@@ -309,14 +398,17 @@ def build_sfx_events(
                 "start_ms": start_ms,
                 "sfx_path": sfx_path,
                 "sfx_type": EVENT_TO_SFX[event_name],
-                "gain_db": _get_effective_gain_db(event_name, profile),
+                "gain_db": _get_effective_gain_db(event_name, profile, item["strength"]),
+                "strength": item["strength"],
+                "cooldown_group": item["cooldown_group"],
+                "source_start_ms": source_start_ms,
                 "fade_in_ms": int(behavior.get("fade_in_ms", 0)),
                 "fade_out_ms": int(behavior.get("fade_out_ms", 80)),
                 "trim_ms": int(behavior.get("trim_ms", 500)),
                 "meta": item.get("meta", {}),
             }
         )
-        last_trigger_time_by_event[event_name] = time_sec
+        last_trigger_by_cooldown_key[cooldown_key] = (time_sec, cooldown)
 
     return built
 
@@ -333,11 +425,14 @@ def _build_single_sfx_filter(
     fade_in_ms: int,
     fade_out_ms: int,
     trim_ms: int = 500,
+    source_start_ms: int = 0,
 ) -> str:
     """
     Builds a filter chain for one SFX input.
     """
     trim_sec = max(0.05, trim_ms / 1000.0)
+    source_start_sec = max(0.0, source_start_ms / 1000.0)
+    source_end_sec = source_start_sec + trim_sec
     fade_in_sec = max(0.0, fade_in_ms / 1000.0)
     fade_out_sec = max(0.0, fade_out_ms / 1000.0)
 
@@ -349,7 +444,7 @@ def _build_single_sfx_filter(
 
     parts = [
         f"[{input_index}:a]aresample=48000",
-        f"atrim=0:{_format_seconds(trim_sec)}",
+        f"atrim=start={_format_seconds(source_start_sec)}:end={_format_seconds(source_end_sec)}",
         "asetpts=PTS-STARTPTS",
         f"volume={gain_db}dB",
     ]
@@ -401,6 +496,7 @@ def _build_filter_complex_for_sfx(
                 fade_in_ms=int(event["fade_in_ms"]),
                 fade_out_ms=int(event["fade_out_ms"]),
                 trim_ms=int(event.get("trim_ms", 500)),
+                source_start_ms=int(event.get("source_start_ms", 0)),
             )
         )
         mix_inputs.append(label)

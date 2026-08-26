@@ -112,6 +112,9 @@ FONTS: list[dict] = [
     {"slug": "covered-by-your-grace", "category": "handwriting","use": "Locker, informal", "weights": [
         (400, "normal", "Regular"),
     ]},
+    {"slug": "mrs-saint-delafield",   "category": "handwriting","use": "Elegante Signatur-Kursive (Caption font_mix Punch-Wort)", "weights": [
+        (400, "normal", "Regular"),
+    ]},
     # Additional preview / requested fonts (may fail if not available on fontsource)
     {"slug": "bangers",               "category": "display",   "use": "Comic-Display (Bangers)", "weights": [
         (400, "normal", "Regular"),

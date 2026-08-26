@@ -1345,6 +1345,17 @@ def _render_epic_thumbnail(frame_bgr, *, hook_text, brief=None):
         # Full AI heroes already contain their own background and cannot be
         # restacked without destroying the intended depth and light direction.
         speaker_render = "real_procedural" if story_asset_ids else ("ai_repertoire" if speaker_name else "real_procedural")
+        if speaker_render == "real_procedural" and matte.subject_rgba is None and speaker_name:
+            # A story background needs a real subject cutout layered over it;
+            # matting can genuinely fail (rembg unavailable inside the loaded
+            # GPU process, grabcut's cutout quality-rejected — both real, not
+            # hypothetical) with no exception, since this module degrades
+            # rather than raises. Composing anyway would silently produce a
+            # thumbnail with no one in it at all. A recognizable speaker beats
+            # a narrative graphic with nobody in it, so fall back to the
+            # approved hero instead of the story asset.
+            speaker_render = "ai_repertoire"
+            story_asset_ids = []
         # Stable per-hook selection lets one speaker use multiple approved heroes.
         hero_seed = int.from_bytes(hashlib.sha256(hook_text.encode("utf-8")).digest()[:2], "big")
         result = compose(

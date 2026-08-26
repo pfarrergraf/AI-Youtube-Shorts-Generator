@@ -376,3 +376,74 @@ def test_matting_falls_back_when_comfyui_is_down(monkeypatch):
     result = matting.extract_subject(np.zeros((120, 80, 3), dtype=np.uint8))
     assert result.provider == "fallback_rembg"
     assert "comfyui_down" in result.info["fallback_reason"]
+
+
+def test_estimate_face_box_degrades_instead_of_crashing_on_a_failed_matte():
+    """Regression: every provider failing/rejected is a real, non-error path.
+
+    ``_extract_speaker_cutout`` deliberately returns ``speaker_rgba: None``
+    when rembg raises *and* grabcut_local's cutout is quality-rejected — no
+    exception, by design (see its own docstring: "every entry point degrades
+    rather than raises"). ``estimate_face_box`` crashed on that ``None``
+    instead (real ICF render, 2026-08-25: 15/15 clips hit this and fell back
+    to the legacy thumbnail, even though the approved AI hero for that
+    speaker was available and never needed the face box at all).
+    """
+    from Components.ThumbnailEffects import estimate_face_box  # noqa: PLC0415
+
+    assert estimate_face_box(None) is None
+
+
+def test_repertoire_thumbnail_survives_a_fully_failed_matte():
+    """The ai_repertoire path never uses subject_rgba/face_box (the plate
+    already contains the synthetic person) — a matting failure must not be
+    able to take it down. Exercises the exact real-render failure mode: no
+    face box, no subject cutout, still expects the approved hero to load.
+    """
+    result = compose(
+        "GOTT WANDELT MINUS ZU PLUS",
+        subject_rgba=None,
+        subject_face_box=None,
+        frame_bgr=None,
+        speaker_render="ai_repertoire",
+        speaker_name="Pastor Olaf Latzel",
+        seed=7,
+    )
+    assert result.info["repertoire"]["status"] == "loaded"
+    assert result.gate is None or result.gate.passed
+
+
+def test_story_asset_falls_back_to_repertoire_when_matting_fails(monkeypatch):
+    """A narrative story background forces ``speaker_render="real_procedural"``
+    so the exact real speaker can be layered over it — but that only works
+    with a real subject cutout. Real ICF render, 2026-08-25: when matting
+    fails entirely (rembg unavailable inside the loaded GPU process, grabcut
+    quality-rejected — both real, not hypothetical), that combination
+    silently rendered a thumbnail with no one in it at all: `subject_rgba`
+    stayed `None` and `real_procedural` has nothing else to place. Falls
+    back to the approved hero instead of the story asset.
+    """
+    import Components.ThumbnailEpic as epic  # noqa: PLC0415
+    import Components.ThumbnailMatting as matting  # noqa: PLC0415
+    from Components.TitleCard import _render_epic_thumbnail  # noqa: PLC0415
+
+    class _FailedMatte:
+        subject_rgba = None
+
+    monkeypatch.setattr(matting, "extract_subject", lambda *a, **k: _FailedMatte())
+
+    captured = {}
+    real_compose = epic.compose
+
+    def spy_compose(*args, **kwargs):
+        captured.update(kwargs)
+        return real_compose(*args, **kwargs)
+
+    monkeypatch.setattr(epic, "compose", spy_compose)
+
+    brief = {"speaker_name": "Pastor Olaf Latzel", "story_asset_ids": ["storm_boat"]}
+    image = _render_epic_thumbnail(None, hook_text="GOTT IST TREU", brief=brief)
+
+    assert image is not None
+    assert captured["speaker_render"] == "ai_repertoire"
+    assert captured["story_asset_ids"] == []

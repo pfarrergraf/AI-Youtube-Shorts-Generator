@@ -25,7 +25,7 @@ MAX_PHRASE_DURATION = 2.0         # was 1.6 — German compound words need more 
 MAX_PHRASE_WORDS = MAX_WORDS_PER_PHRASE
 MIN_PHRASE_WORDS = 1
 MIN_WORD_DISPLAY_SEC = 0.08   # minimum time each word stays highlighted (was 0.02)
-HOLD_AFTER_PHRASE_SEC = 1.5   # last word of phrase holds until next phrase starts, or this long (was 0.0)
+HOLD_AFTER_PHRASE_SEC = 0.6   # last word of phrase holds until next phrase starts, or this long (Benjamin, 2026-08-25: was 1.5 — lingered too long; this value also bounds how long any silence gap can show a caption, since _normalise_phrase_timings clamps the hold to min(this, gap to next phrase's own start) — no separate pause-hiding logic needed)
 SILENCE_GAP_BREAK_SEC = 0.8  # force phrase break on silence gaps >= this
 
 # Stable wrapping defaults
@@ -114,6 +114,77 @@ DEFAULT_CAPTION_STYLE = "emphasis"
 CAPTION_POPS = ("none", "balloon")
 DEFAULT_CAPTION_POP = "balloon"
 
+# Word-level effect layer ("--caption-fx"), combinable with every style and
+# every pop. Only the reflow-safe half of the reference vocabulary lives here:
+# alpha and blur leave glyph advances untouched, so they may animate a single
+# word inside a shared, centred line without shifting its neighbours. Scale
+# and font swaps do move the line and therefore stay on solo events.
+CAPTION_FX_CHOICES = ("none", "fade_up", "blur_words", "typewriter", "flicker", "font_mix")
+DEFAULT_CAPTION_FX = "none"
+FADE_UP_START_ALPHA = "&HC8&"    # ~78% transparent when the word arrives
+FADE_UP_MS = 170
+FADE_UP_RISE_RATIO = 0.5         # of the font size; solo events only
+BLUR_WORDS_START = 6
+BLUR_WORDS_MS = 150
+
+# Letter animation without reflow. A character that has not been typed yet is
+# rendered fully transparent instead of being left out: a transparent glyph
+# still occupies its advance, so the centred line never moves while the word
+# types itself. That also means no glyph measuring is needed anywhere.
+TYPEWRITER_STEP_MS = 38          # per character
+TYPEWRITER_FADE_MS = 20          # how hard each character lands
+TYPEWRITER_MAX_MS = 420          # a long compound must not type past its word
+FLICKER_STEP_MS = 45             # per character offset of the flicker pattern
+FLICKER_DIP_ALPHA = "&HA0&"      # how far a character dips
+FLICKER_DIPS = 2
+
+# Font mix instead of one more highlight colour. Applied to the word the style
+# already renders oversized, so the choice is constant across every event of a
+# phrase — a font swap changes glyph advances, and a *changing* swap would
+# reflow the centred line exactly the way an animated \fs once did.
+# Benjamin, 2026-08-25: wanted the punch word in "super kursiver Schrift"
+# instead of the previous upright Anton swap. Mrs Saint Delafield (Google
+# Fonts, OFL — freely usable here; his first pick, Adobe Fonts' "Absolute
+# Beauty Script", is licensed only for use inside Adobe apps/hosted CSS, not
+# for extraction into this ffmpeg/libass pipeline). A connected script reads
+# as a blob of loops in full caps (verified render), so this word keeps its
+# natural case instead of the style's usual safe_upper() — see the two
+# ``mixed and "font_mix" in fx`` case checks below.
+MIX_FONT_NAME = "Mrs Saint Delafield"
+MIX_FONT_DIR = os.path.expanduser("~/.local/share/fonts/mc_thumbnails/mrs-saint-delafield")
+MIX_FONT_FILE = "MrsSaintDelafield-Regular.ttf"
+# libass resolves a single fontsdir; the mix needs both families in one place.
+CAPTION_FX_FONT_DIR = os.path.expanduser("~/.local/share/fonts/kanzelclips_caption_mix")
+
+# Caption-keyed sound design ("--caption-sfx"). The reference edits put a click
+# on the accent and a typing tick under a word-by-word passage; both live at
+# -15..-30 dB, and both stop being an accent the moment they fire on every
+# word. The rate limits below, not the sample choice, are what keeps them
+# tasteful.
+# Caption glow. "Deep Glow like salt": a bright-core bloom lifted off the
+# caption itself, never a filter over the whole frame. The caption is rendered
+# a second time onto a transparent layer because a bloom needs its own alpha —
+# the production burn composites the captions in a single pass.
+CAPTION_GLOW_MODES = ("off", "soft", "strong")
+DEFAULT_CAPTION_GLOW = "off"
+CAPTION_GLOW_PROFILES = {
+    # threshold: only the bright core blooms, so the black contour cannot smear
+    # a grey halo across the footage.
+    "soft": {"threshold": 190, "sigma": 14, "opacity": 0.45},
+    "strong": {"threshold": 170, "sigma": 20, "opacity": 0.60},
+}
+
+CAPTION_SFX_MODES = ("off", "click", "typing", "both")
+DEFAULT_CAPTION_SFX = "off"
+CAPTION_SFX_ACCENT_EVENT = "caption_accent"
+CAPTION_SFX_LETTER_EVENT = "caption_letter"
+CAPTION_SFX_LEAD_IN_SEC = 0.35   # never fire into the cut from the hero intro
+CAPTION_SFX_ACCENT_MIN_GAP_SEC = 1.2
+CAPTION_SFX_ACCENT_WINDOW_SEC = 10.0
+CAPTION_SFX_ACCENT_PER_WINDOW = 2
+CAPTION_SFX_LETTER_MIN_GAP_SEC = 0.22
+CAPTION_SFX_LETTER_MAX = 10
+
 # Word-by-word mode: a phrase qualifies when the speaker is genuinely slow.
 SLOW_MEDIAN_ONSET_SEC = 0.48   # median word-to-word onset distance (<= ~2 words/s)
 SLOW_SOLO_WORD_SEC = 0.9       # a single word held this long carries an event alone
@@ -132,10 +203,12 @@ BALLOON_START_ALPHA = "&HFF&"   # fully transparent at the start
 BALLOON_FULL_ALPHA = "&H00&"    # fully opaque
 BALLOON_FADE_MS = 180           # duration of the opacity rise
 BALLOON_START_BLUR = 7          # resolves with the spoken-word reveal
-# A word popping in before it is spoken needs the inflate+settle to be done
-# by the time the voice hits — that natural lead-in is exactly the pop's own
-# duration.
-BALLOON_LEAD_IN_SEC = (BALLOON_INFLATE_MS + BALLOON_SETTLE_MS) / 1000.0
+# Benjamin, 2026-08-25: captions were arriving audibly before the voice —
+# the old lead-in was the pop's full inflate+settle duration (260ms), so the
+# animation always finished before the word was heard. "Gleichzeitig" beats
+# "pop fully settled": a small fixed lead-in instead, independent of how long
+# the pop itself takes. The animation now keeps running into the spoken word.
+BALLOON_LEAD_IN_SEC = 0.045
 # The balloon deliberately dominates far more than the shared 1.5x emphasis
 # scale — the punch word is meant to shove its neighbours aside.
 BALLOON_EMPHASIS_SCALE = 2.2
@@ -216,10 +289,12 @@ def _caption_layout(video_width, video_height, safe_area=DEFAULT_CAPTION_SAFE_AR
     margin_v = max(420, int(video_height * CAPTION_MARGIN_BOTTOM_RATIO))
     margin_h = max(70, int(video_width * 0.10))
     if profile is None:
+        usable = video_width - 2 * margin_h
         return {
             "anchor_x": video_width // 2,
             "anchor_y": video_height - margin_v,
-            "usable_width": video_width - 2 * margin_h,
+            "usable_width": usable,
+            "isolated_word_usable_width": usable,
             "margin_v": margin_v,
             "margin_h": margin_h,
             "enabled": False,
@@ -232,6 +307,15 @@ def _caption_layout(video_width, video_height, safe_area=DEFAULT_CAPTION_SAFE_AR
         "anchor_x": int(round(profile["caption_anchor"]["x"] * scale_x)),
         "anchor_y": int(round(profile["caption_anchor"]["y"] * scale_y)),
         "usable_width": int(round(profile["max_base_caption_width"] * scale_x)),
+        # Wider than usable_width on purpose: usable_width is sized for a
+        # full multi-word phrase at rest, conservative so it still peaks
+        # safely under Balloon's 124%. A single unbreakable token with no
+        # line-mates (an oversized compound, or a solo word) doesn't need
+        # that multi-word margin and can use the real measured corridor
+        # instead — see isolated_word_safe_width in caption_safe_areas.json.
+        "isolated_word_usable_width": int(round(
+            profile.get("isolated_word_safe_width", profile["max_base_caption_width"]) * scale_x
+        )),
         "margin_v": margin_v,
         "margin_h": margin_h,
         "enabled": True,
@@ -423,22 +507,34 @@ def segment_words_into_phrases(words):
 
 
 _CHAR_BUDGET_CACHE: dict[tuple, int] = {}
+_MEASUREMENT_FONT_CACHE: dict[tuple, object] = {}
+_WORD_PIXEL_CACHE: dict[tuple, float] = {}
+_AVERAGE_GLYPH_SAMPLE = "der Samen einer Erweckung"
+# SAFE-25 measured a real libass render undershooting this same PIL proxy by
+# up to ~4.3% on long German compounds even when using a real font file —
+# so every width check below adds this margin on top of the direct
+# measurement rather than trusting it at face value.
+_WIDTH_SAFETY_MARGIN = 1.05
+# A defensive floor only — German compounds have no upper bound on length,
+# so there is no scale that is always "big enough"; the safe-area gate (0
+# unsafe pixels) outranks a legibility minimum. This just stops a
+# pathological case from collapsing to an unreadable sliver.
+_MIN_WORD_SCALE = 0.2
 
 
-def _measured_char_budget(preset, font_size, usable_width, fallback):
-    """How many average characters actually fit across *usable_width*.
+def _measurement_font(preset, font_size):
+    """The concrete PIL font used to size captions, or ``None`` if unavailable.
 
-    A hand-picked character count silently goes wrong whenever the face or
-    the size changes: too low and captions wrap that would have fit, too high
-    and they run past the frame edge with no error anywhere.
+    Cached per (font dir, family, size) — loading a TrueType face repeatedly
+    for every word of every phrase would be needlessly slow.
     """
     font_dir = preset.get("fontsdir")
     if not font_dir or not os.path.isdir(font_dir):
-        return fallback
+        return None
 
-    key = (font_dir, preset["fontname"], font_size, usable_width)
-    if key in _CHAR_BUDGET_CACHE:
-        return _CHAR_BUDGET_CACHE[key]
+    key = (font_dir, preset["fontname"], font_size)
+    if key in _MEASUREMENT_FONT_CACHE:
+        return _MEASUREMENT_FONT_CACHE[key]
 
     try:
         from PIL import ImageFont
@@ -448,19 +544,300 @@ def _measured_char_budget(preset, font_size, usable_width, fallback):
         )
         black = [name for name in candidates if "black" in name.lower()] or candidates
         font = ImageFont.truetype(os.path.join(font_dir, black[0]), font_size)
-        sample = "der Samen einer Erweckung"
-        average = font.getlength(sample) / len(sample)
-        budget = max(8, int(usable_width / average)) if average > 0 else fallback
     except Exception:
-        budget = fallback
+        font = None
+
+    _MEASUREMENT_FONT_CACHE[key] = font
+    return font
+
+
+def _measured_char_budget(preset, font_size, usable_width, fallback):
+    """How many average characters actually fit across *usable_width*.
+
+    A hand-picked character count silently goes wrong whenever the face or
+    the size changes: too low and captions wrap that would have fit, too high
+    and they run past the frame edge with no error anywhere.
+    """
+    font = _measurement_font(preset, font_size)
+    if font is None:
+        return fallback
+
+    key = (id(font), usable_width)
+    if key in _CHAR_BUDGET_CACHE:
+        return _CHAR_BUDGET_CACHE[key]
+
+    average = font.getlength(_AVERAGE_GLYPH_SAMPLE) / len(_AVERAGE_GLYPH_SAMPLE)
+    budget = max(8, int(usable_width / average)) if average > 0 else fallback
 
     _CHAR_BUDGET_CACHE[key] = budget
     return budget
 
 
+def _measured_pixel_width(preset, font_size, text):
+    """Real rendered width of *text* at *font_size*, in pixels, plus margin.
+
+    Returns ``None`` when no real font file is available to measure — callers
+    must treat that as "cannot verify", not "fits".
+    """
+    font = _measurement_font(preset, font_size)
+    if font is None:
+        return None
+
+    key = (id(font), text)
+    if key in _WORD_PIXEL_CACHE:
+        return _WORD_PIXEL_CACHE[key]
+
+    width = font.getlength(text) * _WIDTH_SAFETY_MARGIN
+    _WORD_PIXEL_CACHE[key] = width
+    return width
+
+
+def _measured_char_length(preset, font_size, text, fallback):
+    """*text*'s real rendered width, in the same average-character units
+    ``_measured_char_budget`` counts in.
+
+    A raw ``len(text)`` badly misjudges a German compound, whose glyphs run
+    narrower or wider than the sample average — this is DEFEKT 1 from
+    SAFE-25: the character-count guard in ``_word_scales`` only ever
+    stepped an *emphasised* word back down to 1.0, and never caught a word
+    that was already too wide at scale 1.0.
+    """
+    font = _measurement_font(preset, font_size)
+    if font is None:
+        return fallback
+
+    average = font.getlength(_AVERAGE_GLYPH_SAMPLE) / len(_AVERAGE_GLYPH_SAMPLE)
+    if average <= 0:
+        return fallback
+
+    pixel = _measured_pixel_width(preset, font_size, text)
+    return pixel / average if pixel is not None else fallback
+
+
 def resolve_caption_style(style):
     name = str(style or DEFAULT_CAPTION_STYLE).strip().lower()
     return CAPTION_STYLE_PRESETS.get(name, CAPTION_STYLE_PRESETS[DEFAULT_CAPTION_STYLE])
+
+
+def resolve_caption_fx(spec=DEFAULT_CAPTION_FX):
+    """Resolve a comma-separated fx spec into the set of active effects.
+
+    Unlike ``--caption-style``/``--caption-pop``, a comma here means *combine*,
+    not "render one variant each": these effects stack on the same caption.
+    """
+    parts = [part.strip().lower() for part in str(spec or "none").split(",")]
+    active = set()
+    for part in parts:
+        if not part or part == "none":
+            continue
+        if part not in CAPTION_FX_CHOICES:
+            raise ValueError(f"Unknown caption fx: {part}")
+        active.add(part)
+    # fade_up, typewriter and flicker all drive the same \alpha channel on the
+    # same word; two of them at once do not layer, they overwrite each other.
+    alpha_effects = active & {"fade_up", "typewriter", "flicker"}
+    if len(alpha_effects) > 1:
+        raise ValueError(
+            "These caption fx all animate opacity and cannot be combined: "
+            + ", ".join(sorted(alpha_effects))
+        )
+    return frozenset(active)
+
+
+def resolve_caption_glow(mode=DEFAULT_CAPTION_GLOW):
+    selected = str(mode or DEFAULT_CAPTION_GLOW).strip().lower()
+    if selected not in CAPTION_GLOW_MODES:
+        raise ValueError(f"Unknown caption glow: {selected}")
+    return selected
+
+
+def _caption_glow_filter_complex(mode, *, subtitle_name, fonts_dir, width, height, fps,
+                                 extra_vf=""):
+    """Composite: base video, bloom of the caption core, then the sharp caption."""
+    profile = CAPTION_GLOW_PROFILES[mode]
+    ass_opts = f"filename={subtitle_name}:alpha=1"
+    if fonts_dir and os.path.isdir(fonts_dir):
+        ass_opts += f":fontsdir={fonts_dir}"
+    tail = f",{extra_vf}" if extra_vf else ""
+    return (
+        f"color=c=black@0.0:s={width}x{height}:r={fps:.6f},format=rgba,ass={ass_opts}[cap];"
+        "[cap]split=2[capsharp][capglow];"
+        "[capglow]format=rgba,split=2[glowrgb][glowluma];"
+        f"[glowluma]format=gray,lutyuv=y='if(gt(val,{profile['threshold']}),val,0)'[glowmask];"
+        f"[glowrgb][glowmask]alphamerge,gblur=sigma={profile['sigma']}:steps=2,"
+        f"colorchannelmixer=aa={profile['opacity']}[glow];"
+        "[0:v][glow]overlay=shortest=1[withglow];"
+        f"[withglow][capsharp]overlay=shortest=1{tail}[vout]"
+    )
+
+
+def caption_fx_fonts_dir(fx):
+    """Font directory for the burn, or ``None`` to keep the style's own.
+
+    The mix directory is materialised on demand as symlinks, so neither family
+    is duplicated in the repo and both stay resolvable by libass.
+    """
+    if "font_mix" not in fx:
+        return None
+    try:
+        os.makedirs(CAPTION_FX_FONT_DIR, exist_ok=True)
+        for source_dir in (BLACK_FONT_DIR, MIX_FONT_DIR):
+            for name in sorted(os.listdir(source_dir)):
+                if not name.lower().endswith((".ttf", ".otf")):
+                    continue
+                link = os.path.join(CAPTION_FX_FONT_DIR, name)
+                if not os.path.exists(link):
+                    os.symlink(os.path.join(source_dir, name), link)
+    except OSError as error:
+        print(f"[Subtitles] Font mix unavailable ({error}); keeping the style font")
+        return None
+    return CAPTION_FX_FONT_DIR
+
+
+_MIX_FONT_RATIO_CACHE = {}
+
+
+def _mix_font_size_ratio(budget_text, render_text, size):
+    """Size factor that keeps the mixed word at the width it was measured for.
+
+    The line budget was measured on ``budget_text`` (the word's normal,
+    style-cased form — usually uppercase) in the style face; the second
+    family has to hold that same measure while actually rendering
+    ``render_text`` (its own case — a connected script keeps natural case,
+    see ``MIX_FONT_NAME``), so both are measured, never guessed. Mrs Saint
+    Delafield sets *much narrower* than Barlow Semi Condensed Black at equal
+    point size (measured ~1.5x-1.7x on real German words: "Gott" 1.64x,
+    "Vergebung" 1.70x, a 29-char compound 1.71x) — a script face's letters
+    are simply slimmer than a condensed black sans — so the clamp has to
+    reach further than the old Anton-vs-Barlow pairing (0.7-1.2) needed.
+    """
+    key = (budget_text, render_text, size)
+    if key in _MIX_FONT_RATIO_CACHE:
+        return _MIX_FONT_RATIO_CACHE[key]
+
+    ratio = 1.0
+    try:
+        from PIL import ImageFont
+
+        base = ImageFont.truetype(
+            os.path.join(BLACK_FONT_DIR, "BarlowSemiCondensed-Black.ttf"), size,
+        )
+        mixed = ImageFont.truetype(os.path.join(MIX_FONT_DIR, MIX_FONT_FILE), size)
+        base_width = base.getlength(budget_text)
+        mixed_width = mixed.getlength(render_text)
+        if mixed_width > 0 and base_width > 0:
+            ratio = max(0.7, min(2.0, base_width / mixed_width))
+    except Exception:
+        ratio = 1.0
+
+    _MIX_FONT_RATIO_CACHE[key] = ratio
+    return ratio
+
+
+def _letter_reveal(text, pattern):
+    """Per-character alpha animation inside one Dialogue event.
+
+    ``pattern`` returns the override tags for character *index*; the character
+    itself is always emitted, so the line keeps its full width from the first
+    frame and cannot reflow while the animation runs.
+    """
+    pieces = []
+    for index, char in enumerate(text):
+        tags = pattern(index)
+        escaped = _escape_ass_text(char)
+        pieces.append(f"{{{tags}}}{escaped}" if tags else escaped)
+    return "".join(pieces)
+
+
+def _typewriter_pattern(length):
+    step = min(TYPEWRITER_STEP_MS, max(8, TYPEWRITER_MAX_MS // max(1, length)))
+
+    def pattern(index):
+        start = index * step
+        return f"\\alpha&HFF&\\t({start},{start + TYPEWRITER_FADE_MS},\\alpha&H00&)"
+
+    return pattern
+
+
+def _flicker_pattern(length):
+    def pattern(index):
+        # Deterministic, not random: the same word has to render identically on
+        # every rerun, or a caption stops being reproducible.
+        cursor = ((index * 7) % 5) * 12
+        tags = ""
+        for dip in range(FLICKER_DIPS):
+            tags += (
+                f"\\t({cursor},{cursor + FLICKER_STEP_MS // 2},\\alpha{FLICKER_DIP_ALPHA})"
+                f"\\t({cursor + FLICKER_STEP_MS // 2},{cursor + FLICKER_STEP_MS},\\alpha&H00&)"
+            )
+            cursor += FLICKER_STEP_MS + 25 * (dip + 1)
+        return "\\alpha&H00&" + tags
+
+    return pattern
+
+
+def resolve_caption_sfx(mode=DEFAULT_CAPTION_SFX):
+    selected = str(mode or DEFAULT_CAPTION_SFX).strip().lower()
+    if selected not in CAPTION_SFX_MODES:
+        raise ValueError(f"Unknown caption sfx mode: {selected}")
+    return selected
+
+
+def plan_caption_sfx_cues(word_events, mode=DEFAULT_CAPTION_SFX, preset=None):
+    """Body-relative SFX cues derived from already-normalised caption timings.
+
+    Candidates are the punch words (click) and the words of a word-by-word
+    passage (typing tick). Everything else is rate limiting, and the limits are
+    the whole point: an accent that fires on every punch word is a metronome.
+
+    The punch word is resolved exactly the way the renderer resolves it, via
+    ``_pick_emphasis_indices`` — reading ``word["emphasis"]`` alone would make
+    the click depend on the LLM emphasis map being present, and it would land
+    on a different word than the one the viewer sees grow. A style that renders
+    no oversized word at all (``classic``) gets no click: there is nothing for
+    it to accent.
+    """
+    selected = resolve_caption_sfx(mode)
+    if selected == "off" or not word_events:
+        return []
+
+    want_typing = selected in ("typing", "both")
+    want_click = selected in ("click", "both") and (
+        preset is None or float(preset.get("emphasis_scale", 1.0)) > 1.0
+    )
+
+    cues = []
+    accent_times = []
+    letter_count = 0
+    last_letter = None
+
+    for phrase in word_events:
+        accented = _pick_emphasis_indices((phrase or [])[:MAX_WORDS_PER_PHRASE])
+        for index, word in enumerate(phrase or []):
+            start = word.get("start")
+            if start is None or start < CAPTION_SFX_LEAD_IN_SEC:
+                continue
+            if word.get("solo"):
+                if not want_typing or letter_count >= CAPTION_SFX_LETTER_MAX:
+                    continue
+                if last_letter is not None and start - last_letter < CAPTION_SFX_LETTER_MIN_GAP_SEC:
+                    continue
+                cues.append({"event": CAPTION_SFX_LETTER_EVENT, "time_sec": float(start)})
+                last_letter = start
+                letter_count += 1
+                continue
+            if not want_click or index not in accented:
+                continue
+            if accent_times and start - accent_times[-1] < CAPTION_SFX_ACCENT_MIN_GAP_SEC:
+                continue
+            recent = [t for t in accent_times if start - t < CAPTION_SFX_ACCENT_WINDOW_SEC]
+            if len(recent) >= CAPTION_SFX_ACCENT_PER_WINDOW:
+                continue
+            cues.append({"event": CAPTION_SFX_ACCENT_EVENT, "time_sec": float(start)})
+            accent_times.append(start)
+
+    cues.sort(key=lambda cue: cue["time_sec"])
+    return cues
 
 
 def safe_upper(text):
@@ -498,6 +875,12 @@ def _pick_emphasis_indices(phrase):
     if not candidates:
         return set()
     return {max(candidates)[2]}
+
+
+def _ms_int(seconds):
+    """Integer milliseconds, rounded exactly the way the contract producer's
+    own ``_ms`` rounds -- the two must never disagree."""
+    return int(round(float(seconds) * 1000.0))
 
 
 def _median(values):
@@ -546,6 +929,12 @@ def _mark_balloon_eligibility(phrases):
             level = "medium"
         for word in phrase:
             word["balloon_eligible"] = level is not None
+            # The rate this level was decided from, kept on the words so a
+            # later solo split (which re-groups tokens into ~350ms fragments
+            # whose own rate no longer means anything) can carry the parent
+            # passage's pacing forward instead of re-measuring the fragment.
+            if wpm != float("inf"):
+                word["pacing_wpm"] = wpm
             if level is not None:
                 word["balloon_level"] = level
     return phrases
@@ -586,6 +975,7 @@ def split_slow_phrases(phrases):
         if not phrase or not _phrase_is_slow(phrase):
             result.append(phrase)
             continue
+        parent_wpm = _phrase_wpm(phrase)
         for unit in _solo_units(phrase):
             solo = {
                 "text": " ".join(str(w["text"]).strip() for w in unit),
@@ -593,6 +983,10 @@ def split_slow_phrases(phrases):
                 "end": unit[-1]["end"],
                 "solo": True,
             }
+            # A solo unit's own span is a fragment of the phrase that decided
+            # the pacing; carry the parent's measured rate, never re-measure.
+            if parent_wpm != float("inf"):
+                solo["pacing_wpm"] = parent_wpm
             if any(w.get("emphasis") for w in unit):
                 solo["emphasis"] = True
             if all(w.get("balloon_eligible") for w in unit):
@@ -761,7 +1155,7 @@ def _read_video_metadata(video_path):
     cap.release()
 
     duration = frame_count / fps if frame_count > 0 and fps > 0 else 0.0
-    return width, height, duration
+    return width, height, duration, fps
 
 
 def _starts_mid_segment(transcriptions, subtitle_start_time):
@@ -810,27 +1204,73 @@ def _drop_leading_partial_phrase(phrases, *, subtitle_start_time, transcriptions
     return phrases
 
 
-def _word_scales(phrase, preset, max_chars=None, scale_override=None):
+def _word_scales(phrase, preset, max_chars=None, scale_override=None, font_size=None,
+                 peak_multiplier=1.0, isolated_usable_width_px=None):
     """Per-word size multipliers, constant for every event of the phrase.
 
     Constant is the whole point: each word's Dialogue event re-renders the
     entire phrase, so an override set that changed between events would
     reflow the centred line and make the caption jitter word by word.
+
+    ``peak_multiplier`` is the Balloon's whole-event ``\\fscx`` overshoot
+    (e.g. 1.24) that gets applied on top of this word's own ``\\fs`` at
+    render time — a shared-line word must fit *after* that multiplication,
+    not just at rest. ``isolated_usable_width_px`` is the wider, real
+    measured safe corridor (see ``isolated_word_usable_width`` in
+    ``_caption_layout``) that a word with no line-mates can use instead of
+    ``max_chars``' multi-word budget.
     """
     scale = float(scale_override if scale_override is not None else preset.get("emphasis_scale", 1.0))
     words = phrase[:MAX_WORDS_PER_PHRASE]
-    if scale <= 1.0:
-        return [1.0] * len(words)
+    budget = max_chars or preset["max_chars_per_line"]
 
     scales = [1.0] * len(words)
-    for index in _pick_emphasis_indices(words):
-        word_scale = scale
-        # A long German compound at 1.5× overflows the frame on its own;
-        # step it down rather than shrink the whole caption.
-        budget = max_chars or preset["max_chars_per_line"]
-        while word_scale > 1.0 and len(words[index]["text"]) * word_scale > budget:
-            word_scale -= 0.25
-        scales[index] = max(1.0, word_scale)
+    if scale > 1.0:
+        for index in _pick_emphasis_indices(words):
+            word_scale = scale
+            # A long German compound at 1.5× overflows the frame on its own;
+            # step it down rather than shrink the whole caption.
+            while word_scale > 1.0 and len(words[index]["text"]) * word_scale > budget:
+                word_scale -= 0.25
+            scales[index] = max(1.0, word_scale)
+
+    # SAFE-25 DEFEKT 1: the emphasis loop above only ever steps a word back
+    # down *to* 1.0 — it never shrinks a word below that, so a long German
+    # compound that is already too wide at the style's base size rendered at
+    # full size regardless, and wrap_phrase_words cannot split it any
+    # further. This pass covers every word, at whatever scale it already
+    # has, against the budget already discounted by the Balloon peak so the
+    # *animated* width — not just the resting width — stays in bounds.
+    #
+    # A word that trips this check has no line-mates by construction: it was
+    # already too wide for the multi-word budget on its own, so
+    # wrap_phrase_words gives it its own line. It therefore doesn't need that
+    # budget's multi-word margin either — measured against the real safe
+    # corridor (isolated_usable_width_px) it needs far less shrinking than
+    # the conservative multi-word budget alone would suggest (e.g. a 12-char
+    # word landed at ~0.57x against the multi-word budget but only needed
+    # ~0.75x against the real corridor — reported by Benjamin as captions
+    # rendering needlessly small on real material).
+    if font_size:
+        if isolated_usable_width_px:
+            effective_budget_px = isolated_usable_width_px / max(peak_multiplier, 1.0)
+            for index, word in enumerate(words):
+                pixel_width = _measured_pixel_width(preset, font_size, word["text"])
+                if pixel_width is None or pixel_width <= 0:
+                    continue
+                if pixel_width * scales[index] > effective_budget_px:
+                    fitted = effective_budget_px / pixel_width
+                    scales[index] = max(_MIN_WORD_SCALE, min(scales[index], fitted))
+        else:
+            effective_budget = budget / max(peak_multiplier, 1.0)
+            for index, word in enumerate(words):
+                length = _measured_char_length(preset, font_size, word["text"], None)
+                if length is None or length <= 0:
+                    continue
+                if length * scales[index] > effective_budget:
+                    fitted = effective_budget / length
+                    scales[index] = max(_MIN_WORD_SCALE, min(scales[index], fitted))
+
     return scales
 
 
@@ -848,15 +1288,54 @@ def _build_phrase_layout_metadata(phrase, scales=None, max_chars=MAX_CHARS_PER_L
     return wrapped_lines, line_ranges
 
 
-def _render_word(text, *, active, scale, base_font_size, preset, balloon_level=None):
-    escaped = _escape_ass_text(safe_upper(text) if preset["uppercase"] else text)
-    colour = ACTIVE_COLOUR if active else INACTIVE_COLOUR
+def _fx_word_tags(fx, *, skip_alpha=False):
+    """Animation tags for the arriving word, plus the reset the line needs.
 
-    if active and preset["active_ramp"]:
+    Inline overrides persist for the rest of the line, so a word that fades or
+    resolves from blur has to hand the following words their sharp, opaque
+    state back explicitly.
+    """
+    tags = ""
+    resets = ""
+    if "fade_up" in fx and not skip_alpha:
+        tags += (
+            f"\\alpha{FADE_UP_START_ALPHA}"
+            f"\\t(0,{FADE_UP_MS},\\alpha&H00&)"
+        )
+        resets += "\\alpha&H00&"
+    if "blur_words" in fx:
+        tags += f"\\blur{BLUR_WORDS_START}\\t(0,{BLUR_WORDS_MS},\\blur0)"
+        resets += "\\blur0"
+    return tags, resets
+
+
+def _render_word(text, *, active, scale, base_font_size, preset, balloon_level=None,
+                 fx=frozenset(), mixed=False):
+    budget_plain = safe_upper(text) if preset["uppercase"] else text
+    # The mix font is a connected script — full caps render as an unreadable
+    # blob of loops (verified render, 2026-08-25), so the swapped word keeps
+    # its natural case instead of the style's usual uppercasing. The line's
+    # width budget was still measured on ``budget_plain``; see
+    # ``_mix_font_size_ratio``.
+    plain = text if (mixed and "font_mix" in fx) else budget_plain
+    escaped = _escape_ass_text(plain)
+    colour = ACTIVE_COLOUR if active else INACTIVE_COLOUR
+    letters = (fx & {"typewriter", "flicker"}) if active else frozenset()
+
+    if active and preset["active_ramp"] and not letters:
         # Start on the inactive colour and animate into the highlight, so the
         # word visibly ignites instead of cutting.  Colour-only animation
         # cannot change glyph advances, so the line never moves while the
         # highlight travels across it.
+        #
+        # Skipped when a letter effect is also revealing this word: the
+        # per-character alpha fade already *is* the arrival animation, and
+        # stacking a 90 ms white-to-yellow colour ramp on top of a handful of
+        # fast, staggered per-letter alpha fades produced a muddy,
+        # low-contrast blend for the first letters typed — real ICF render,
+        # 2026-08-25: the "F" of "Frage," briefly rendered almost invisible
+        # against the background. Reported by Benjamin as a caption looking
+        # "cut off/invisible".
         colour_tags = f"\\c{INACTIVE_COLOUR}\\t(0,90,\\c{ACTIVE_COLOUR})"
     else:
         colour_tags = f"\\c{colour}"
@@ -867,14 +1346,44 @@ def _render_word(text, *, active, scale, base_font_size, preset, balloon_level=N
         # others sideways. The inflate rides on the phrase entrance instead.
         colour_tags += _balloon_alpha_tags(balloon_level)
 
-    if scale > 1.0:
+    fx_reset = ""
+    if active and fx:
+        # The balloon already carries the opacity rise; a second \alpha ramp on
+        # the same word would only fight it. The same is true for the letter
+        # effects, which drive \alpha per character. (``letters`` computed
+        # above, ahead of the colour_tags decision.)
+        fx_tags, fx_reset = _fx_word_tags(
+            fx, skip_alpha=bool(balloon_level) or bool(letters),
+        )
+        colour_tags += fx_tags
+        if letters:
+            pattern = (_typewriter_pattern if "typewriter" in letters else _flicker_pattern)(
+                len(plain)
+            )
+            escaped = _letter_reveal(plain, pattern)
+            fx_reset += "\\alpha&H00&"
+
+    size = base_font_size * scale
+    if mixed and "font_mix" in fx:
+        # The punch word carries the second family. Constant across every event
+        # of the phrase by construction — the picked index does not change —
+        # and width-compensated, so the line it sits in still fits.
+        size *= _mix_font_size_ratio(budget_plain, plain, int(round(size)))
+        colour_tags = f"\\fn{MIX_FONT_NAME}" + colour_tags
+        fx_reset += f"\\fn{preset['fontname']}"
+        scale = max(scale, 1.0001)  # force the explicit \fs below
+
+    if scale != 1.0:
         # Inline \fs, never \r: a style reset would also wipe the karaoke
-        # colour of the active word.
-        opening = f"\\fs{int(round(base_font_size * scale))}{colour_tags}"
-        closing = f"{{\\fs{base_font_size}}}"
+        # colour of the active word. scale < 1.0 happens too now (SAFE-25
+        # DEFEKT 1) -- a word too wide even at the style's base size has to
+        # shrink below it, not just step back down to it.
+        opening = f"\\fs{int(round(size))}{colour_tags}"
+        closing = f"\\fs{base_font_size}{fx_reset}"
     else:
         opening = colour_tags
-        closing = ""
+        closing = fx_reset
+    closing = f"{{{closing}}}" if closing else ""
 
     return f"{{{opening}}}{escaped}{closing}"
 
@@ -905,7 +1414,8 @@ def _balloon_alpha_tags(level="strong"):
 
 
 def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_font_size=100,
-                                   max_chars=None, balloon_level=None):
+                                   max_chars=None, balloon_level=None, fx=frozenset(),
+                                   isolated_usable_width_px=None):
     if preset is None:
         preset = CAPTION_STYLE_PRESETS[DEFAULT_CAPTION_STYLE]
     if max_chars is None:
@@ -920,7 +1430,23 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
         BALLOON_MOTION_PROFILES[balloon_level]["emphasis_scale"]
         if balloon_level else None
     )
-    scales = _word_scales(phrase, preset, max_chars=max_chars, scale_override=scale_override)
+    # The Balloon's overshoot scales the *whole shared-line event*, not just
+    # the active word -- every word visible in that event peaks at this
+    # factor too, so the width check has to budget for it up front.
+    peak_multiplier = (
+        BALLOON_MOTION_PROFILES[balloon_level]["overshoot_scale"] / 100.0
+        if balloon_level else 1.0
+    )
+    scales = _word_scales(
+        phrase, preset, max_chars=max_chars, scale_override=scale_override,
+        font_size=base_font_size, peak_multiplier=peak_multiplier,
+        isolated_usable_width_px=isolated_usable_width_px,
+    )
+    # The compound guard in _word_scales can step an oversized word back to 1.0;
+    # the font mix still belongs on that word, so read the pick directly.
+    mix_indices = (
+        _pick_emphasis_indices(phrase[:MAX_WORDS_PER_PHRASE]) if "font_mix" in fx else set()
+    )
     wrapped_lines, line_ranges = _build_phrase_layout_metadata(
         phrase, scales=scales, max_chars=max_chars,
     )
@@ -940,6 +1466,8 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
                     base_font_size=base_font_size,
                     preset=preset,
                     balloon_level=balloon_level,
+                    fx=fx,
+                    mixed=(word_idx in mix_indices),
                 )
             )
         if rendered_words:
@@ -948,17 +1476,56 @@ def _build_highlight_text_for_word(phrase, active_word_idx, preset=None, base_fo
     return r"\N".join(lines)
 
 
-def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_height, margin_v,
-                          max_chars=None, balloon_level=None, anchor_x=None, anchor_y=None):
-    """One big word, centred, popping in — used when the speaker slows down."""
-    text = _escape_ass_text(safe_upper(word["text"]) if preset["uppercase"] else word["text"])
+def _solo_word_font_size_px(word, *, base_font_size, preset, max_chars=None,
+                             balloon_level=None, usable_width=None):
+    """Resolved static size (px) for a solo word — factored out of
+    ``_build_solo_word_text`` so a contract producer (MAT-47) can obtain the
+    exact same number without re-deriving it by hand and risking drift.
+    """
     size = int(round(base_font_size * max(1.25, preset["emphasis_scale"])))
-    # A two-word unit at 1.5x can outrun the frame; scale it to the same
-    # character budget the wrapped captions use.
-    budget = max_chars or preset["max_chars_per_line"]
-    length = len(word["text"])
-    if length > budget:
-        size = max(base_font_size, int(size * budget / length))
+    # SAFE-25 DEFEKT 2: a solo word has no line-mates, so — like the
+    # shared-line path — it should be checked against its real measured
+    # width and the real safe corridor (``usable_width``, the wider,
+    # isolated-word bound: see ``isolated_word_usable_width`` in
+    # ``_caption_layout``), not a raw character count against the
+    # conservative multi-word budget. Checked at the size the Balloon
+    # overshoot actually scales up to, since that peak — not the resting
+    # size — is the true footprint that has to stay in bounds.
+    peak_scale = (
+        BALLOON_MOTION_PROFILES[balloon_level]["overshoot_scale"] / 100.0
+        if balloon_level else 1.0
+    )
+    if usable_width:
+        peak_width = _measured_pixel_width(preset, int(round(size * peak_scale)), word["text"])
+        if peak_width is not None and peak_width > usable_width:
+            size = max(int(base_font_size * _MIN_WORD_SCALE), int(size * usable_width / peak_width))
+    else:
+        # No measured safe corridor available — fall back to the coarser
+        # character-count clamp against the multi-word budget.
+        budget = max_chars or preset["max_chars_per_line"]
+        length = len(word["text"])
+        if length > budget:
+            size = max(base_font_size, int(size * budget / length))
+    return size
+
+
+def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_height, margin_v,
+                          max_chars=None, balloon_level=None, anchor_x=None, anchor_y=None,
+                          fx=frozenset(), usable_width=None):
+    """One big word, centred, popping in — used when the speaker slows down."""
+    budget_plain = safe_upper(word["text"]) if preset["uppercase"] else word["text"]
+    # Same case exception as _render_word: the mix font is a connected
+    # script, unreadable in full caps, so it keeps the word's natural case.
+    plain = word["text"] if "font_mix" in fx else budget_plain
+    text = _escape_ass_text(plain)
+    letters = fx & {"typewriter", "flicker"}
+    if letters:
+        pattern = (_typewriter_pattern if "typewriter" in letters else _flicker_pattern)(len(plain))
+        text = _letter_reveal(plain, pattern)
+    size = _solo_word_font_size_px(
+        word, base_font_size=base_font_size, preset=preset, max_chars=max_chars,
+        balloon_level=balloon_level, usable_width=usable_width,
+    )
     # \pos measures from the top, MarginV from the bottom — land the solo word
     # on the same optical line the wrapped captions occupy.
     pos_x = int(anchor_x if anchor_x is not None else video_width // 2)
@@ -969,13 +1536,39 @@ def _build_solo_word_text(word, *, base_font_size, preset, video_width, video_he
         # A solo event stands alone, so the full balloon is safe here.
         motion = _balloon_scale_tags(balloon_level) + _balloon_alpha_tags(balloon_level)
     else:
-        motion = f"\\fscx70\\fscy70\\t(0,{SOLO_POP_MS},\\fscx100\\fscy100)\\fad(40,0)"
+        motion = f"\\fscx70\\fscy70\\t(0,{SOLO_POP_MS},\\fscx100\\fscy100)"
+        if "fade_up" not in fx:
+            motion += "\\fad(40,0)"
+    if "fade_up" in fx:
+        # Nothing shares this event, so "fade up" can be the literal reference
+        # effect here: the word rises into place as it becomes opaque. \move is
+        # the only way to translate a caption and it is event-wide — which is
+        # exactly why this half of the effect cannot run inside a shared line.
+        rise = int(round(size * FADE_UP_RISE_RATIO))
+        entrance = f"\\move({pos_x},{pos_y + rise},{pos_x},{pos_y},0,{FADE_UP_MS})"
+        if not balloon_level:
+            entrance += f"\\alpha{FADE_UP_START_ALPHA}\\t(0,{FADE_UP_MS},\\alpha&H00&)"
+        motion = entrance + motion
+        position = "\\an5"
+    else:
+        position = f"\\an5\\pos({pos_x},{pos_y})"
+    if "blur_words" in fx:
+        motion += f"\\blur{BLUR_WORDS_START}\\t(0,{BLUR_WORDS_MS},\\blur0)"
+    if letters:
+        # The per-character \alpha animation owns opacity here; an event-wide
+        # fade would only overwrite it.
+        motion = motion.replace("\\fad(40,0)", "")
+    font = ""
+    if "font_mix" in fx:
+        font = f"\\fn{MIX_FONT_NAME}"
+        size = int(round(size * _mix_font_size_ratio(budget_plain, plain, size)))
     return (
-        f"{{\\an5\\pos({pos_x},{pos_y})\\fs{size}\\c{colour}{motion}}}{text}"
+        f"{{{position}{font}\\fs{size}\\c{colour}{motion}}}{text}"
     )
 
 
-def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0):
+def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0,
+                              body_duration_ms=None, cutoff_sink=None):
     """Make all word Dialogue events strictly sequential — no overlaps ever.
 
     A global cursor tracks the end of the last emitted event.  Each new
@@ -998,9 +1591,34 @@ def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0):
     voice actually reaches it, instead of popping in on top of the syllable.
     The strict-sequencing cursor still applies, so it never overlaps the
     still-running previous event.
+
+    ``body_duration_ms``/``cutoff_sink`` (INT-51, contract mode): the caller's
+    own ``caption_cutoff`` and the contract's ``caption_cutoff_ms`` were
+    computed from *different* word sets, with *different* end clamps, and
+    quantised to milliseconds in a *different order* -- three independent
+    divergences that made the contract's display intervals overrun its own
+    cutoff by exactly 1 ms on 6 of 15 real ICF highlights. When
+    ``body_duration_ms`` is given, the cutoff is instead derived here, in
+    integer milliseconds, from the same post-truncation word set the contract
+    producer sees, and reported back through ``cutoff_sink`` so producer and
+    renderer cannot disagree by construction. The ASS emitter only has
+    centisecond resolution (``_seconds_to_ass_time``), so this is provably
+    invisible to rendered output.
     """
     if not word_events:
         return word_events
+
+    if body_duration_ms is not None:
+        truncated_ends = [
+            _ms_int(w["end"])
+            for phrase in word_events if phrase
+            for w in phrase[:MAX_WORDS_PER_PHRASE]
+        ]
+        if truncated_ends:
+            cutoff_ms = min(int(body_duration_ms), max(truncated_ends))
+            caption_cutoff = cutoff_ms / 1000.0
+            if cutoff_sink is not None:
+                cutoff_sink["caption_cutoff_ms"] = cutoff_ms
 
     normalised = []
     cursor = 0.0          # end-time of the last emitted Dialogue event
@@ -1041,8 +1659,19 @@ def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0):
             if caption_cutoff is not None:
                 we = min(we, max(ws + 0.001, caption_cutoff))
 
-            carried = {"text": w["text"], "start": ws, "end": we}
-            for key in ("emphasis", "solo", "synthetic", "balloon_eligible", "balloon_level"):
+            # MAT-47: keep the pre-normalisation (spoken) interval alongside
+            # the just-computed display interval. Nothing in the ASS
+            # emission path reads these two extra keys, but a contract
+            # producer materialised from this same list otherwise has no way
+            # to recover "when was this word actually spoken" — that
+            # information is gone the moment ``start``/``end`` are
+            # overwritten with the lead-in/hold-adjusted display values.
+            carried = {
+                "text": w["text"], "start": ws, "end": we,
+                "spoken_start": w["start"], "spoken_end": w["end"],
+            }
+            for key in ("emphasis", "solo", "synthetic", "balloon_eligible",
+                        "balloon_level", "pacing_wpm"):
                 if w.get(key):
                     carried[key] = w[key]
             copied.append(carried)
@@ -1056,9 +1685,29 @@ def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0):
 
 def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_events=None,
                     style=DEFAULT_CAPTION_STYLE, pop=DEFAULT_CAPTION_POP, caption_cutoff=None,
-                    caption_safe_area=DEFAULT_CAPTION_SAFE_AREA):
+                    caption_safe_area=DEFAULT_CAPTION_SAFE_AREA,
+                    caption_fx=DEFAULT_CAPTION_FX, caption_sfx=DEFAULT_CAPTION_SFX,
+                    contract_sink=None, body_duration_ms=None):
+    """Write the ASS file and return the body-relative caption SFX cues.
+
+    ``contract_sink`` (MAT-47/INT-50): an optional, write-only, empty dict a
+    caller can pass to receive the exact post-normalisation render state
+    (``word_events``, ``preset``, ``font_size``, ``max_chars``, ``layout``,
+    ``balloon``) needed for ``Components.CaptionContract.build_caption_contract``.
+    Populated exactly once, right after ``_normalise_phrase_timings``, before
+    any ASS ``Dialogue`` line is emitted -- never touched when ``None`` (the
+    default), so the existing render path is provably unaffected. Kept as a
+    side-channel rather than a return value so this function's return type
+    (the SFX cue list) never has to change for callers that don't ask for a
+    contract. Must be empty on entry: this function does not clear or merge
+    into it, and a caller rendering multiple clips in a loop must pass a
+    fresh dict every time.
+    """
+    if contract_sink is not None and contract_sink:
+        raise ValueError("contract_sink must be an empty dict on entry")
     preset = resolve_caption_style(style)
     balloon = str(pop or "").lower() == "balloon"
+    fx = resolve_caption_fx(caption_fx)
 
     # slightly smaller than before
     font_size = max(33, int(video_height * preset["font_ratio"]) - 2)
@@ -1104,6 +1753,7 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
 
+    sfx_cues = []
     if word_events:
         if balloon:
             word_events = _mark_balloon_eligibility(word_events)
@@ -1119,9 +1769,25 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
         # cut, not a pop — bring every event forward so inflate+settle lands
         # just before the voice does.
         lead_in = BALLOON_LEAD_IN_SEC if balloon else 0.0
+        cutoff_sink = {} if contract_sink is not None else None
         word_events = _normalise_phrase_timings(
             word_events, caption_cutoff=caption_cutoff, lead_in=lead_in,
+            body_duration_ms=body_duration_ms, cutoff_sink=cutoff_sink,
         )
+        if contract_sink is not None:
+            # Exactly the state build_caption_contract() needs, captured at
+            # exactly this point -- after normalisation, before any Dialogue
+            # line is emitted. See the docstring above.
+            contract_sink.update(
+                word_events=word_events, preset=preset, font_size=font_size,
+                max_chars=max_chars, layout=layout, balloon=balloon,
+            )
+            # The resolved cutoff, so build_caption_contract can use exactly
+            # this number instead of recomputing it a fourth way.
+            contract_sink.update(cutoff_sink or {})
+        # Planned from the normalised timings, so a cue can never sit on a
+        # word whose Dialogue event was moved, clamped, or dropped.
+        sfx_cues = plan_caption_sfx_cues(word_events, caption_sfx, preset=preset)
 
         for phrase in word_events:
             if not phrase:
@@ -1150,11 +1816,14 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
                         anchor_y=layout["anchor_y"],
                         max_chars=max_chars,
                         balloon_level=phrase_balloon_level,
+                        fx=fx,
+                        usable_width=layout["isolated_word_usable_width"],
                     )
                 else:
                     highlight_text = _build_highlight_text_for_word(
                         phrase, word_idx, preset=preset, base_font_size=font_size,
                         max_chars=max_chars, balloon_level=phrase_balloon_level,
+                        fx=fx, isolated_usable_width_px=layout["isolated_word_usable_width"],
                     )
                     position = f"\\an2\\pos({layout['anchor_x']},{layout['anchor_y']})"
                     if phrase_balloon_level:
@@ -1195,6 +1864,146 @@ def _write_ass_file(subtitle_path, video_width, video_height, chunks, word_event
 
     with open(subtitle_path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
+
+    return sfx_cues
+
+
+_OVERLAP_EPSILON = 1e-9
+# Two milliseconds: comfortably above the millisecond quantisation the caption
+# contract's timeline uses, so a repaired span can never round to zero length.
+_MIN_REPAIRED_SPAN_SEC = 0.002
+
+
+def _repair_degenerate_word_runs(words, video_duration=0.0):
+    """Give overlapping real ASR words their own non-overlapping spans.
+
+    Real German sermon ASR (measured on ICF material, verified against the
+    *raw* transcript -- these are not the retimer's interpolated words) emits
+    runs of 2-22 consecutive words sharing near-identical start timestamps,
+    with up to 940 ms of mutual overlap. A naive ``a.end = b.start`` nudge
+    would produce a zero-duration word in 290 of 315 measured cases, so the
+    run is redistributed instead:
+
+    a) an immediately-repeating token cycle inside the run is collapsed to its
+       first occurrence (an ASR loop such as "krank. krank." at one timestamp
+       is one spoken word, not two);
+    b) the survivors are spread evenly across the run's own frame, extended
+       forward to the next distinct word's start when that frame is too narrow
+       to give each survivor a visible slot;
+    c) every survivor is marked ``synthetic``. This is the honest part: these
+       timings were never measured, and ``_phrase_wpm``/``_phrase_is_slow``
+       already correctly refuse to read a speaking rate off synthetic words --
+       so a repaired run loses motion/SFX eligibility instead of driving it
+       off a number the retimer invented.
+
+    Applied to *both* the classic and the contract render path on purpose:
+    gating it would reintroduce exactly the contract-vs-render drift the
+    contract exists to rule out.
+    """
+    if len(words) < 2:
+        return _enforce_word_span_invariant(words, video_duration)
+
+    repaired = []
+    index = 0
+    total = len(words)
+    while index < total:
+        end = index
+        while end + 1 < total and words[end]["end"] > words[end + 1]["start"] + _OVERLAP_EPSILON:
+            end += 1
+        if end == index:
+            repaired.append(words[index])
+            index += 1
+            continue
+
+        run = words[index:end + 1]
+
+        survivors = [run[0]]
+        for word in run[1:]:
+            if _emphasis_token(word.get("text")) != _emphasis_token(survivors[-1].get("text")):
+                survivors.append(word)
+
+        # The run's own words can be out of order (that is what makes it
+        # degenerate), so the frame comes from the extremes, never from run[0],
+        # and never earlier than the last word already emitted.
+        frame_start = min(w["start"] for w in run)
+        if repaired:
+            frame_start = max(frame_start, repaired[-1]["start"] + _MIN_REPAIRED_SPAN_SEC)
+        frame_end = max(w["end"] for w in run)
+        needed = len(survivors) * MIN_WORD_DISPLAY_SEC
+        if frame_end - frame_start < needed:
+            # Grow into the gap before the next real word; the display pass
+            # re-sequences everything afterwards, so a small spoken-time
+            # overlap with that word is harmless -- a zero-length word is not.
+            frame_end = max(frame_end, frame_start + needed)
+            if end + 1 < total:
+                frame_end = min(frame_end, max(words[end + 1]["end"], frame_start + needed))
+        if video_duration > 0:
+            frame_end = max(min(frame_end, video_duration), frame_start)
+
+        # Whatever room is left has to give every survivor a strictly positive
+        # millisecond span. If it cannot, the run is an ASR loop at a single
+        # timestamp against the clip end: keep as many words as fit rather
+        # than emit spans the contract (rightly) rejects as invalid.
+        while len(survivors) > 1 and (frame_end - frame_start) / len(survivors) < _MIN_REPAIRED_SPAN_SEC:
+            survivors.pop()
+        width = max((frame_end - frame_start) / len(survivors), _MIN_REPAIRED_SPAN_SEC)
+
+        for position, word in enumerate(survivors):
+            repaired.append({
+                **word,
+                "start": frame_start + position * width,
+                "end": frame_start + (position + 1) * width,
+                "synthetic": True,
+            })
+
+        index = end + 1
+
+    return _enforce_word_span_invariant(repaired, video_duration)
+
+
+def _enforce_word_span_invariant(words, video_duration=0.0):
+    """Guarantee strictly increasing millisecond starts and positive spans.
+
+    The redistribution above fixes *overlapping* runs, but real material also
+    carries words that are degenerate on their own: the cleanup retimer can
+    distribute one millisecond across three tokens (0.33 ms each, which rounds
+    to a zero-length span), and ASR occasionally emits an end before its own
+    start. Both are invisible in the classic centisecond ASS output and both
+    make a caption contract structurally invalid, so this pass states the
+    postcondition once, in one place, instead of leaving it implicit.
+
+    Anything it has to move is marked ``synthetic`` -- the same honesty rule as
+    the redistribution: a timing this pass invented must never be read as a
+    measured speaking rate.
+    """
+    out = []
+    cursor_ms = None
+    for word in words:
+        start = float(word["start"])
+        end = float(word["end"])
+        start_ms = _ms_int(start)
+        touched = False
+
+        if cursor_ms is not None and start_ms <= cursor_ms:
+            start = (cursor_ms + 1) / 1000.0
+            start_ms = cursor_ms + 1
+            touched = True
+        if _ms_int(end) <= start_ms:
+            end = start + _MIN_REPAIRED_SPAN_SEC
+            touched = True
+        if video_duration > 0 and end > video_duration:
+            end = video_duration
+            if _ms_int(end) <= start_ms:
+                # No room left in the clip for this word at all.
+                continue
+            touched = True
+
+        if touched:
+            word = {**word, "start": start, "end": end, "synthetic": True}
+        out.append(word)
+        cursor_ms = start_ms
+
+    return out
 
 
 def _build_word_events(
@@ -1248,6 +2057,15 @@ def _build_word_events(
         start = max(0, start)
         if video_duration > 0:
             end = min(video_duration, end)
+        # _smart_pad_end snaps the clip end onto a segment boundary, which is
+        # regularly the *start* of the next word -- so a word starting exactly
+        # at video_duration is not a rare edge case (3 of 15 real ICF
+        # highlights). The clamp above then collapsed it to zero length: an
+        # invisible caption event that still counted as the clip's last
+        # spoken word and so dragged the caption cutoff onto itself. It is not
+        # audible in this clip at all; drop it like any other out-of-range word.
+        if end <= start:
+            continue
 
         text = (w["text"] or "").strip()
         if text and not text.startswith("["):
@@ -1273,6 +2091,8 @@ def _build_word_events(
     if not adjusted:
         return []
 
+    adjusted = _repair_degenerate_word_runs(adjusted, video_duration)
+
     phrases = segment_words_into_phrases(adjusted)
     if trim_leading_partial_phrase:
         phrases = _drop_leading_partial_phrase(
@@ -1292,11 +2112,19 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
                            extra_vf="",
                            caption_style=DEFAULT_CAPTION_STYLE,
                            caption_pop=DEFAULT_CAPTION_POP,
-                           caption_safe_area=DEFAULT_CAPTION_SAFE_AREA):
+                           caption_safe_area=DEFAULT_CAPTION_SAFE_AREA,
+                           caption_fx=DEFAULT_CAPTION_FX,
+                           caption_sfx=DEFAULT_CAPTION_SFX,
+                           caption_glow=DEFAULT_CAPTION_GLOW,
+                           contract_sink=None, body_duration_ms=None):
+    """Burn the captions in and return the body-relative caption SFX cues.
+
+    ``contract_sink``: see ``_write_ass_file`` -- passed straight through.
+    """
     input_video = os.path.abspath(input_video)
     output_video = os.path.abspath(output_video)
 
-    video_width, video_height, video_duration = _read_video_metadata(input_video)
+    video_width, video_height, video_duration, video_fps = _read_video_metadata(input_video)
 
     word_events = None
     if word_timestamps:
@@ -1331,13 +2159,13 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
     if not relevant_transcriptions and not word_events:
         print("No transcriptions found for this video segment")
         shutil.copyfile(input_video, output_video)
-        return
+        return []
 
     chunked = _chunk_transcriptions(relevant_transcriptions) if relevant_transcriptions else []
     if not chunked and not word_events:
         print("No subtitle chunks generated for this video segment")
         shutil.copyfile(input_video, output_video)
-        return
+        return []
 
     subtitle_dir = os.path.dirname(output_video) or os.getcwd()
     subtitle_path = None
@@ -1353,7 +2181,7 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
         ) as handle:
             subtitle_path = handle.name
 
-        _write_ass_file(
+        sfx_cues = _write_ass_file(
             subtitle_path,
             video_width,
             video_height,
@@ -1363,38 +2191,73 @@ def add_subtitles_to_video(input_video, output_video, transcriptions,
             pop=caption_pop,
             caption_cutoff=caption_cutoff,
             caption_safe_area=caption_safe_area,
+            caption_fx=caption_fx,
+            caption_sfx=caption_sfx,
+            contract_sink=contract_sink,
+            body_duration_ms=body_duration_ms,
         )
 
         preset = resolve_caption_style(caption_style)
+        fonts_dir = caption_fx_fonts_dir(resolve_caption_fx(caption_fx)) or preset["fontsdir"]
         n_events = len(word_events) if word_events else len(chunked)
         mode = "phrase highlight" if word_events else "chunked"
         pop_note = f", pop: {caption_pop}" if str(caption_pop or "none").lower() != "none" else ""
-        print(f"Adding {n_events} subtitle events ({mode}, style: {caption_style}{pop_note}) "
+        fx_active = sorted(resolve_caption_fx(caption_fx))
+        fx_note = f", fx: {'+'.join(fx_active)}" if fx_active else ""
+        if resolve_caption_glow(caption_glow) != "off":
+            fx_note += f", glow: {resolve_caption_glow(caption_glow)}"
+        print(f"Adding {n_events} subtitle events ({mode}, style: {caption_style}{pop_note}{fx_note}) "
               "to video with FFmpeg NVENC...")
+        sfx_mode = resolve_caption_sfx(caption_sfx)
+        if sfx_mode != "off":
+            # Printed even at zero: a requested effect that silently plans
+            # nothing is the failure mode worth seeing in the log.
+            print(f"[Subtitles] Caption SFX: {len(sfx_cues)} cue(s) ({sfx_mode})")
 
-        vf_chain = f"subtitles={os.path.basename(subtitle_path)}"
-        # Without an explicit directory libass resolves the family through
-        # fontconfig and silently substitutes whatever is closest.
-        if preset["fontsdir"] and os.path.isdir(preset["fontsdir"]):
-            vf_chain += f":fontsdir={preset['fontsdir']}"
-        if extra_vf:
-            vf_chain = f"{vf_chain},{extra_vf}"
+        glow = resolve_caption_glow(caption_glow)
+        if glow != "off":
+            command = [
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-i", input_video,
+                "-filter_complex", _caption_glow_filter_complex(
+                    glow,
+                    subtitle_name=os.path.basename(subtitle_path),
+                    fonts_dir=fonts_dir,
+                    width=video_width,
+                    height=video_height,
+                    fps=video_fps,
+                    extra_vf=extra_vf or "",
+                ),
+                "-map", "[vout]",
+                "-an",
+                *NVENC_FLAGS,
+                output_video,
+            ]
+        else:
+            vf_chain = f"subtitles={os.path.basename(subtitle_path)}"
+            # Without an explicit directory libass resolves the family through
+            # fontconfig and silently substitutes whatever is closest.
+            if fonts_dir and os.path.isdir(fonts_dir):
+                vf_chain += f":fontsdir={fonts_dir}"
+            if extra_vf:
+                vf_chain = f"{vf_chain},{extra_vf}"
 
-        command = [
-            "ffmpeg",
-            "-y",
-            "-loglevel",
-            "error",
-            "-i",
-            input_video,
-            "-vf",
-            vf_chain,
-            "-an",
-            *NVENC_FLAGS,
-            output_video,
-        ]
+            command = [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-i",
+                input_video,
+                "-vf",
+                vf_chain,
+                "-an",
+                *NVENC_FLAGS,
+                output_video,
+            ]
         _run_ffmpeg(command, "subtitle burn", cwd=subtitle_dir)
         print(f"Subtitles added successfully -> {output_video}")
+        return sfx_cues
     finally:
         if subtitle_path and os.path.exists(subtitle_path):
             os.remove(subtitle_path)

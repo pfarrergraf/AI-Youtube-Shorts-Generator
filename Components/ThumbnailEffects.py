@@ -484,7 +484,17 @@ def contract_alpha(alpha: Image.Image, radius: int, *, feather: float = 1.0) -> 
     return _soft_threshold_alpha(contracted, low=8, high=245)
 
 
-def estimate_face_box(subject_rgba: Image.Image):
+def estimate_face_box(subject_rgba: Image.Image | None):
+    # extract_subject()/_extract_speaker_cutout() degrade to subject_rgba=None
+    # rather than raise when every background-removal provider fails or gets
+    # quality-rejected (by design — the Sunday pipeline must keep producing
+    # thumbnails even when ComfyUI, rembg, and grabcut all come up empty).
+    # Without this guard that None reached here uncaught and crashed the
+    # *entire* epic-thumbnail render — including the ai_repertoire path,
+    # which never even uses this face box, so a matting failure had no
+    # business taking the approved hero plate down with it.
+    if subject_rgba is None:
+        return None
     alpha = subject_rgba.convert("RGBA").getchannel("A")
     bbox = alpha.getbbox()
     if bbox is None:
