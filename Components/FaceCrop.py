@@ -12,15 +12,21 @@ _DEFAULT_CROP_PROFILE = {
     # -- detection --
     "face_confidence_threshold": None,
     "detection_search_band_ratio": None,
+    "face_detection_hz": 3.0,
     # -- stability / damping --
     "stillness_lock": False,
     "stillness_threshold_ratio": 0.10,
     "stillness_window_sec": 2.5,
     "lock_transition_ease_sec": 0.4,
     "pan_smoothing_sigma_sec": None,
+    "vertical_smoothing_sigma_sec": None,
     # -- framing / headroom --
     "base_zoom": None,
+    "base_crop_height_px": None,
     "vertical_anchor_ratio": None,
+    "face_vertical_framing": False,
+    "face_target_y_ratio": 0.24,
+    "headroom_face_heights": 0.55,
     # -- shot switching --
     "shot_switch_mode": "random",
     "mid_zoom_range": [1.10, 1.22],
@@ -64,7 +70,8 @@ def _load_crop_profile_override():
       way to configure a lane with many knobs instead of one large file.
 
     If both are set, the single file loads first, then the directory's files
-    layer on top.
+    layer on top. CAMERA_CROP_SPEAKER_PROFILE_FILE is loaded last as the
+    speaker-specific correction layer.
     """
     profile = dict(_DEFAULT_CROP_PROFILE)
 
@@ -96,6 +103,24 @@ def _load_crop_profile_override():
                     print(f"  Warning: could not read {name} ({exc}); skipped")
         else:
             print(f"  Warning: CAMERA_CROP_CONFIG_DIR not found: {config_dir}")
+
+    speaker_path = os.getenv("CAMERA_CROP_SPEAKER_PROFILE_FILE")
+    if speaker_path:
+        if os.path.isfile(speaker_path):
+            try:
+                with open(speaker_path, "r", encoding="utf-8") as f:
+                    _merge_profile_dict(
+                        profile,
+                        json.load(f),
+                        f"CAMERA_CROP_SPEAKER_PROFILE_FILE ({speaker_path})",
+                    )
+            except (OSError, ValueError) as exc:
+                print(
+                    "  Warning: could not read CAMERA_CROP_SPEAKER_PROFILE_FILE "
+                    f"({exc}); using lane profile"
+                )
+        else:
+            print(f"  Warning: CAMERA_CROP_SPEAKER_PROFILE_FILE not found: {speaker_path}")
 
     return profile
 
@@ -203,7 +228,7 @@ def _clamp_search_region(anchor_x, band_width, frame_width):
     return x0, x1
 
 
-def _detect_dnn_face_center(net, frame, confidence_threshold, region=None):
+def _detect_dnn_face_box(net, frame, confidence_threshold, region=None):
     """Run the SSD face detector, optionally restricted to a horizontal region.
 
     A face that is small relative to the *whole* frame (a wide static stage
@@ -214,7 +239,7 @@ def _detect_dnn_face_center(net, frame, confidence_threshold, region=None):
     input resolution (measured on real footage: mean confidence 0.25 -> 0.88
     for an identical, position-agreeing detection).
 
-    Returns (face_center_x_in_full_frame_coords, confidence) or (None, None).
+    Returns ``((x1, y1, x2, y2), confidence)`` in full-frame coordinates.
     """
     frame_h, frame_w = frame.shape[:2]
     if region is not None:
@@ -231,17 +256,30 @@ def _detect_dnn_face_center(net, frame, confidence_threshold, region=None):
     net.setInput(blob)
     detections = net.forward()
     best_confidence = confidence_threshold
-    face_center_x = None
+    face_box = None
     for i in range(detections.shape[2]):
         confidence = detections[0, 0, i, 2]
         if confidence > best_confidence:
             box = detections[0, 0, i, 3:7] * np.array([crop_w, crop_h, crop_w, crop_h])
-            (bx1, _by1, bx2, _by2) = box.astype("int")
-            face_center_x = x0 + (bx1 + bx2) // 2
+            bx1, by1, bx2, by2 = box.astype("int")
+            bx1 = max(0, min(crop_w - 1, bx1))
+            bx2 = max(bx1 + 1, min(crop_w, bx2))
+            by1 = max(0, min(crop_h - 1, by1))
+            by2 = max(by1 + 1, min(crop_h, by2))
+            face_box = (x0 + bx1, by1, x0 + bx2, by2)
             best_confidence = confidence
-    if face_center_x is None:
+    if face_box is None:
         return None, None
-    return face_center_x, float(best_confidence)
+    return face_box, float(best_confidence)
+
+
+def _detect_dnn_face_center(net, frame, confidence_threshold, region=None):
+    """Backward-compatible horizontal-centre view of the DNN detection."""
+    box, confidence = _detect_dnn_face_box(net, frame, confidence_threshold, region=region)
+    if box is None:
+        return None, confidence
+    x1, _y1, x2, _y2 = box
+    return (x1 + x2) // 2, confidence
 
 
 def _motion_speaker_center(previous_gray, current_frame):
@@ -430,11 +468,11 @@ def _plan_camera_effects_movement_aware(
     xcu_duration_range_sec=(1.2, 2.2),
     effect_interval_range_sec=(4.0, 6.0),
 ):
-    """Like _plan_camera_effects, but close-ups/extreme-close-ups only land
-    inside static (pulpit-still) stretches; a moving speaker only ever gets
-    a mid-shot. All ranges come from the Oberlahnstein-lane camera-crop
-    profile (shot_switching.json) — every default above matches the
-    original hardcoded _plan_camera_effects values.
+    """Like _plan_camera_effects, but every tighter shot must be fully static.
+
+    This remains the non-semantic compatibility mode.  A moving speaker stays
+    on the base crop regardless of requested shot size. All ranges come from
+    the camera-crop profile; defaults match the legacy random planner.
     """
     duration_sec = total_frames / fps
     effects = []
@@ -460,7 +498,7 @@ def _plan_camera_effects_movement_aware(
         candidates.append(("jump_xcu", int(xcu_dur * fps), {"zoom": random.uniform(*xcu_zoom_range)}, True))
     for _ in range(4):
         mid_dur = random.uniform(*mid_duration_range_sec)
-        candidates.append(("jump_mid", int(mid_dur * fps), {"zoom": random.uniform(*mid_zoom_range)}, False))
+        candidates.append(("jump_mid", int(mid_dur * fps), {"zoom": random.uniform(*mid_zoom_range)}, True))
 
     random.shuffle(candidates)
     max_effects = max(1, int(duration_sec / random.uniform(*effect_interval_range_sec)))
@@ -490,6 +528,89 @@ def _plan_camera_effects_movement_aware(
     return effects
 
 
+def _plan_camera_effects_content_aware(
+    total_frames,
+    fps,
+    is_static,
+    shot_cues,
+    mid_zoom_range=(1.10, 1.22),
+    close_zoom_range=(1.28, 1.45),
+    xcu_zoom_range=(1.55, 1.85),
+    mid_duration_range_sec=(1.2, 2.4),
+    close_duration_range_sec=(1.6, 3.0),
+    xcu_duration_range_sec=(1.2, 2.2),
+    effect_interval_range_sec=(4.0, 6.0),
+):
+    """Place deterministic inserts on semantic beats that are visually quiet.
+
+    A cue is ``{"time_sec": float, "strength": 1..4, "reason": str}`` on
+    the already-extracted clip timeline.  Unlike the legacy random planner,
+    every tighter crop begins on a content beat and its complete hold must be
+    inside a still run.  This is the editorial equivalent of cutting on an
+    actor's line while preserving screen direction: movement is followed by
+    the base crop; the closer insert is earned by a settled rhetorical beat.
+    """
+    if not shot_cues or total_frames <= 0 or fps <= 0:
+        return []
+
+    margin = int(round(1.5 * fps))
+    min_gap = int(round(max(1.2, min(effect_interval_range_sec)) * fps))
+    max_effects = max(1, int((total_frames / fps) / max(1.0, sum(effect_interval_range_sec) / 2.0)))
+    placed = []
+
+    def _midpoint(bounds):
+        lo, hi = (float(bounds[0]), float(bounds[1]))
+        return (lo + hi) / 2.0
+
+    # Strongest cues get first refusal; timeline order is restored afterward.
+    ordered = sorted(
+        shot_cues,
+        key=lambda cue: (-int(cue.get("strength", 1)), float(cue.get("time_sec", 0.0))),
+    )
+    for cue in ordered:
+        if len(placed) >= max_effects:
+            break
+        strength = max(1, min(4, int(cue.get("strength", 1))))
+        if strength >= 4:
+            etype = "jump_xcu"
+            duration = _midpoint(xcu_duration_range_sec)
+            zoom = _midpoint(xcu_zoom_range)
+        elif strength >= 3:
+            etype = "jump_close"
+            duration = _midpoint(close_duration_range_sec)
+            zoom = _midpoint(close_zoom_range)
+        else:
+            etype = "jump_mid"
+            duration = _midpoint(mid_duration_range_sec)
+            zoom = _midpoint(mid_zoom_range)
+
+        # Cut a fraction before the stressed word, so picture and spoken beat
+        # arrive perceptually together rather than the image reacting late.
+        start = int(round((float(cue.get("time_sec", 0.0)) - 0.08) * fps))
+        end = start + max(1, int(round(duration * fps)))
+        if start < margin or end > total_frames - margin:
+            continue
+        if not bool(is_static[start:end].all()):
+            continue
+        if any(not (end + min_gap < ps or start > pe + min_gap) for _, ps, pe, _ in placed):
+            continue
+        placed.append(
+            (
+                etype,
+                start,
+                end,
+                {
+                    "zoom": zoom,
+                    "reason": str(cue.get("reason") or "semantic_beat"),
+                    "strength": strength,
+                },
+            )
+        )
+
+    placed.sort(key=lambda effect: effect[1])
+    return placed
+
+
 def _resolve_crop_window(
     x_pos,
     zoom,
@@ -499,6 +620,10 @@ def _resolve_crop_window(
     original_height,
     x_offset=0,
     vertical_anchor_ratio=_DEFAULT_VERTICAL_ANCHOR_RATIO,
+    face_center_y=None,
+    face_height=None,
+    face_target_y_ratio=0.24,
+    headroom_face_heights=0.55,
 ):
     zoom = max(1.0, float(zoom or 1.0))
     anchor = max(0.0, min(1.0, float(vertical_anchor_ratio)))
@@ -509,7 +634,20 @@ def _resolve_crop_window(
 
     zx = int(x_pos + (vertical_width - crop_w) // 2 + x_offset)
     zy_slack = max(0, original_height - crop_h)
-    zy = int(round(zy_slack * anchor))
+    if face_center_y is not None and face_height is not None and float(face_height) > 0:
+        # Put the detected face in the upper part of the portrait frame.  The
+        # second bound guarantees room above the detector box (which usually
+        # starts at the forehead, not the topmost hair pixel).
+        face_center_y = float(face_center_y)
+        face_height = float(face_height)
+        target_ratio = max(0.10, min(0.45, float(face_target_y_ratio)))
+        headroom_ratio = max(0.0, min(2.0, float(headroom_face_heights)))
+        ideal_top = face_center_y - target_ratio * crop_h
+        face_top = face_center_y - face_height / 2.0
+        max_top_for_headroom = face_top - headroom_ratio * face_height
+        zy = int(round(min(ideal_top, max_top_for_headroom)))
+    else:
+        zy = int(round(zy_slack * anchor))
     zx = max(0, min(zx, original_width - crop_w))
     zy = max(0, min(zy, original_height - crop_h))
     return zx, zy, crop_w, crop_h
@@ -543,7 +681,10 @@ def _effect_vertical_anchor_ratio(
 def _apply_zoom_crop(frame, x_pos, zoom, vertical_width, vertical_height,
                      original_width, original_height, x_offset=0,
                      out_w=None, out_h=None,
-                     vertical_anchor_ratio=_DEFAULT_VERTICAL_ANCHOR_RATIO):
+                     vertical_anchor_ratio=_DEFAULT_VERTICAL_ANCHOR_RATIO,
+                     face_center_y=None, face_height=None,
+                     face_target_y_ratio=0.24,
+                     headroom_face_heights=0.55):
     """Crop a zoomed region centered on face position, return resized to output dims."""
     zx, zy, crop_w, crop_h = _resolve_crop_window(
         x_pos,
@@ -554,6 +695,10 @@ def _apply_zoom_crop(frame, x_pos, zoom, vertical_width, vertical_height,
         original_height,
         x_offset=x_offset,
         vertical_anchor_ratio=vertical_anchor_ratio,
+        face_center_y=face_center_y,
+        face_height=face_height,
+        face_target_y_ratio=face_target_y_ratio,
+        headroom_face_heights=headroom_face_heights,
     )
 
     cropped = frame[zy:zy + crop_h, zx:zx + crop_w]
@@ -564,7 +709,8 @@ def _apply_zoom_crop(frame, x_pos, zoom, vertical_width, vertical_height,
 
 def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=True,
                      target_height=1920, base_zoom=1.0,
-                     vertical_anchor_ratio=_DEFAULT_VERTICAL_ANCHOR_RATIO):
+                     vertical_anchor_ratio=_DEFAULT_VERTICAL_ANCHOR_RATIO,
+                     shot_cues=None):
     """Crop video to vertical 9:16 format with professional camera tracking and effects.
 
     Face tracking runs at native resolution for accuracy.  The final output is
@@ -609,6 +755,9 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
     vertical_anchor_ratio = max(0.0, min(1.0, float(vertical_anchor_ratio)))
     face_confidence_threshold = float(crop_profile["face_confidence_threshold"] or 0.5)
     search_band_ratio = crop_profile["detection_search_band_ratio"]
+    face_vertical_framing = bool(crop_profile["face_vertical_framing"])
+    face_target_y_ratio = float(crop_profile["face_target_y_ratio"])
+    headroom_face_heights = float(crop_profile["headroom_face_heights"])
 
     # Native crop dimensions (face tracking at source resolution)
     vertical_height = original_height
@@ -616,13 +765,31 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
     vertical_width = vertical_width - (vertical_width % 2)
     vertical_height = vertical_height - (vertical_height % 2)
 
+    base_crop_height_px = crop_profile["base_crop_height_px"]
+    fixed_base_crop = None
+    if base_crop_height_px is not None:
+        requested_h = max(2, min(original_height, int(base_crop_height_px)))
+        requested_h -= requested_h % 2
+        requested_w = int(requested_h * 9 / 16)
+        requested_w -= requested_w % 2
+        # The renderer already expresses tighter crops through one scale ratio.
+        # Derive that ratio from the requested pixel-exact portrait width so a
+        # 4096x2160 source can use a true 1080x1920 window without upscaling.
+        base_zoom = max(base_zoom, vertical_width / requested_w)
+        fixed_base_crop = (requested_w, requested_h)
+
     # Final output dimensions (always target_height, 9:16)
     out_h = int(target_height)
     out_w = int(out_h * 9 / 16)
     out_w = out_w - (out_w % 2)
     out_h = out_h - (out_h % 2)
     print(f"Output dimensions: {out_w}x{out_h} (native crop: {vertical_width}x{vertical_height})")
-    if base_zoom > 1.001 or abs(vertical_anchor_ratio - _DEFAULT_VERTICAL_ANCHOR_RATIO) > 0.001:
+    if fixed_base_crop:
+        print(
+            f"Applying fixed source crop: {fixed_base_crop[0]}x{fixed_base_crop[1]} "
+            "(no base-shot enlargement)"
+        )
+    elif base_zoom > 1.001 or abs(vertical_anchor_ratio - _DEFAULT_VERTICAL_ANCHOR_RATIO) > 0.001:
         print(
             f"Applying base reframe: zoom={base_zoom:.3f}, "
             f"vertical_anchor={vertical_anchor_ratio:.2f}"
@@ -636,9 +803,12 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
     # PASS 1: Detect faces and build smooth tracking path
     # ------------------------------------------------------------------
     print("Pass 1/2: Detecting faces and planning camera moves...")
-    detect_interval = max(1, int(fps / 3))
+    detection_hz = max(1.0, min(float(fps), float(crop_profile["face_detection_hz"] or 3.0)))
+    detect_interval = max(1, int(round(fps / detection_hz)))
+    print(f"  Face tracking sample rate: {fps / detect_interval:.1f} Hz")
 
     face_detections = {}
+    face_geometry_detections = {}
     face_hits = 0
     motion_hits = 0
     band_hits = 0
@@ -652,23 +822,28 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
             break
         if frame_idx % detect_interval == 0:
             face_center_x = None
+            face_box = None
             if use_dnn:
                 w = frame.shape[1]
                 region = None
                 if band_width and detection_anchor_x is not None:
                     region = _clamp_search_region(detection_anchor_x, band_width, w)
-                face_center_x, _conf = _detect_dnn_face_center(
+                face_box, _conf = _detect_dnn_face_box(
                     net, frame, face_confidence_threshold, region=region
                 )
+                if face_box is not None:
+                    face_center_x = (face_box[0] + face_box[2]) // 2
                 if face_center_x is not None and region is not None:
                     band_hits += 1
                 elif face_center_x is None and region is not None:
                     # Lost inside the narrow band (she moved further than
                     # expected) — re-acquire on the full frame before falling
                     # back to the noisy motion heuristic.
-                    face_center_x, _conf = _detect_dnn_face_center(
+                    face_box, _conf = _detect_dnn_face_box(
                         net, frame, face_confidence_threshold, region=None
                     )
+                    if face_box is not None:
+                        face_center_x = (face_box[0] + face_box[2]) // 2
                 if face_center_x is not None:
                     detection_anchor_x = face_center_x
             else:
@@ -679,8 +854,15 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
                     best_face = max(faces, key=lambda f: f[2] * f[3])
                     fx, fy, fw, fh = best_face
                     face_center_x = fx + fw // 2
+                    face_box = (fx, fy, fx + fw, fy + fh)
             if face_center_x is not None:
                 face_hits += 1
+                if face_box is not None:
+                    x1, y1, x2, y2 = face_box
+                    face_geometry_detections[frame_idx] = (
+                        (y1 + y2) / 2.0,
+                        max(1.0, float(y2 - y1)),
+                    )
                 # Keep the motion baseline current even when the frontal face
                 # path succeeds, so a later side turn can fall back cleanly.
                 _, previous_detection_gray = _motion_speaker_center(
@@ -742,6 +924,43 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
         targets = gaussian_filter1d(targets, sigma=sigma, mode='nearest')
     np.clip(targets, 0, original_width - vertical_width, out=targets)
 
+    face_centers_y = None
+    face_heights = None
+    if face_vertical_framing and face_geometry_detections:
+        geometry_frames = np.array(sorted(face_geometry_detections), dtype=np.float64)
+        geometry_y = np.array(
+            [face_geometry_detections[int(fi)][0] for fi in geometry_frames],
+            dtype=np.float64,
+        )
+        geometry_h = np.array(
+            [face_geometry_detections[int(fi)][1] for fi in geometry_frames],
+            dtype=np.float64,
+        )
+        all_frames = np.arange(total_frames, dtype=np.float64)
+        face_centers_y = np.interp(all_frames, geometry_frames, geometry_y)
+        face_heights = np.interp(all_frames, geometry_frames, geometry_h)
+        vertical_sigma_sec = crop_profile["vertical_smoothing_sigma_sec"]
+        vertical_sigma = (
+            max(0.0, float(vertical_sigma_sec)) * fps
+            if vertical_sigma_sec is not None
+            else sigma
+        )
+        if vertical_sigma >= 0.5:
+            face_centers_y = gaussian_filter1d(
+                face_centers_y, sigma=vertical_sigma, mode='nearest'
+            )
+            face_heights = gaussian_filter1d(
+                face_heights, sigma=vertical_sigma, mode='nearest'
+            )
+        print(
+            "  Face-guided portrait framing: "
+            f"target_y={face_target_y_ratio:.2f}, "
+            f"headroom={headroom_face_heights:.2f} face heights, "
+            f"vertical smoothing={vertical_sigma / fps:.2f}s"
+        )
+    elif face_vertical_framing:
+        print("  Warning: no face geometry found; using configured vertical fallback")
+
     # A speaker planted at a fixed pulpit still produces a few pixels of
     # frame-to-frame detection jitter that the Gaussian pass alone doesn't
     # fully remove; lock those stretches dead flat when the profile asks
@@ -763,6 +982,17 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
     # ------------------------------------------------------------------
     if not enable_camera_effects:
         effects = []
+    elif crop_profile["shot_switch_mode"] == "content_aware":
+        effects = _plan_camera_effects_content_aware(
+            total_frames, fps, is_static, shot_cues,
+            mid_zoom_range=crop_profile["mid_zoom_range"],
+            close_zoom_range=crop_profile["close_zoom_range"],
+            xcu_zoom_range=crop_profile["xcu_zoom_range"],
+            mid_duration_range_sec=crop_profile["mid_duration_range_sec"],
+            close_duration_range_sec=crop_profile["close_duration_range_sec"],
+            xcu_duration_range_sec=crop_profile["xcu_duration_range_sec"],
+            effect_interval_range_sec=crop_profile["effect_interval_range_sec"],
+        )
     elif crop_profile["shot_switch_mode"] == "movement_aware":
         effects = _plan_camera_effects_movement_aware(
             total_frames, fps, is_static,
@@ -778,13 +1008,16 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
         effects = _plan_camera_effects(total_frames, fps)
     if effects:
         labels = []
-        for etype, es, ee, _ in effects:
+        for etype, es, ee, params in effects:
             t_start = es / fps
             t_end = ee / fps
-            labels.append(f"    {etype} @ {t_start:.1f}s–{t_end:.1f}s")
+            reason = f" ({params['reason']})" if params.get("reason") else ""
+            labels.append(f"    {etype} @ {t_start:.1f}s–{t_end:.1f}s{reason}")
         print(f"  Planned {len(effects)} camera effects:\n" + "\n".join(labels))
+    elif enable_camera_effects and crop_profile["shot_switch_mode"] == "content_aware":
+        print("  No tighter insert: no semantic cue had a fully still hold window")
     elif enable_camera_effects:
-        print("  No camera effects (clip too short)")
+        print("  No camera effects (clip too short or no valid placement)")
     else:
         print("  Camera effects disabled for this render stage")
 
@@ -804,6 +1037,10 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
             break
 
         x_pos = int(round(targets[frame_count]))
+        face_center_y = (
+            float(face_centers_y[frame_count]) if face_centers_y is not None else None
+        )
+        face_height = float(face_heights[frame_count]) if face_heights is not None else None
 
         # Check if any effect is active on this frame
         active_effect = None
@@ -827,7 +1064,11 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
                                            vertical_width, vertical_height,
                                            original_width, original_height,
                                            out_w=out_w, out_h=out_h,
-                                           vertical_anchor_ratio=anchor_ratio)
+                                           vertical_anchor_ratio=anchor_ratio,
+                                           face_center_y=face_center_y,
+                                           face_height=face_height,
+                                           face_target_y_ratio=face_target_y_ratio,
+                                           headroom_face_heights=headroom_face_heights)
 
             elif etype == "jump_mid":
                 # Hold an instant mid-shot — no ramp, no slow zoom.
@@ -841,10 +1082,18 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
                                            vertical_width, vertical_height,
                                            original_width, original_height,
                                            out_w=out_w, out_h=out_h,
-                                           vertical_anchor_ratio=anchor_ratio)
+                                           vertical_anchor_ratio=anchor_ratio,
+                                           face_center_y=face_center_y,
+                                           face_height=face_height,
+                                           face_target_y_ratio=face_target_y_ratio,
+                                           headroom_face_heights=headroom_face_heights)
             else:
                 # Fallback: normal crop
-                if base_zoom > 1.001 or abs(vertical_anchor_ratio - _DEFAULT_VERTICAL_ANCHOR_RATIO) > 0.001:
+                if (
+                    base_zoom > 1.001
+                    or abs(vertical_anchor_ratio - _DEFAULT_VERTICAL_ANCHOR_RATIO) > 0.001
+                    or face_centers_y is not None
+                ):
                     cropped = _apply_zoom_crop(
                         frame,
                         x_pos,
@@ -856,6 +1105,10 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
                         out_w=out_w,
                         out_h=out_h,
                         vertical_anchor_ratio=vertical_anchor_ratio,
+                        face_center_y=face_center_y,
+                        face_height=face_height,
+                        face_target_y_ratio=face_target_y_ratio,
+                        headroom_face_heights=headroom_face_heights,
                     )
                 else:
                     x_start = max(0, min(x_pos, original_width - vertical_width))
@@ -864,7 +1117,11 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
                                          interpolation=cv2.INTER_LANCZOS4)
         else:
             # Normal tracking — no effect active
-            if base_zoom > 1.001 or abs(vertical_anchor_ratio - _DEFAULT_VERTICAL_ANCHOR_RATIO) > 0.001:
+            if (
+                base_zoom > 1.001
+                or abs(vertical_anchor_ratio - _DEFAULT_VERTICAL_ANCHOR_RATIO) > 0.001
+                or face_centers_y is not None
+            ):
                 cropped = _apply_zoom_crop(
                     frame,
                     x_pos,
@@ -876,6 +1133,10 @@ def crop_to_vertical(input_video_path, output_video_path, enable_camera_effects=
                     out_w=out_w,
                     out_h=out_h,
                     vertical_anchor_ratio=vertical_anchor_ratio,
+                    face_center_y=face_center_y,
+                    face_height=face_height,
+                    face_target_y_ratio=face_target_y_ratio,
+                    headroom_face_heights=headroom_face_heights,
                 )
             else:
                 x_start = max(0, min(x_pos, original_width - vertical_width))

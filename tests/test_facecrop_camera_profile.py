@@ -100,6 +100,94 @@ def test_config_dir_later_file_overrides_earlier_on_shared_key(monkeypatch, tmp_
     assert profile["base_zoom"] == 1.9  # alphabetically later file wins
 
 
+def test_speaker_profile_layers_over_lane_config(monkeypatch, tmp_path):
+    lane_dir = tmp_path / "lane"
+    lane_dir.mkdir()
+    (lane_dir / "framing.json").write_text(
+        json.dumps({"base_zoom": 1.6, "vertical_anchor_ratio": 0.65}),
+        encoding="utf-8",
+    )
+    speaker_profile = tmp_path / "benjamin_graf.json"
+    speaker_profile.write_text(json.dumps({
+        "vertical_anchor_ratio": 0.5,
+        "face_detection_hz": 12.5,
+        "pan_smoothing_sigma_sec": 0.06,
+        "vertical_smoothing_sigma_sec": 1.2,
+    }), encoding="utf-8")
+    monkeypatch.delenv("CAMERA_CROP_PROFILE_FILE", raising=False)
+    monkeypatch.setenv("CAMERA_CROP_CONFIG_DIR", str(lane_dir))
+    monkeypatch.setenv("CAMERA_CROP_SPEAKER_PROFILE_FILE", str(speaker_profile))
+
+    profile = fc._load_crop_profile_override()
+
+    assert profile["base_zoom"] == 1.6
+    assert profile["vertical_anchor_ratio"] == 0.5
+    assert profile["face_detection_hz"] == 12.5
+    assert profile["pan_smoothing_sigma_sec"] == 0.06
+    assert profile["vertical_smoothing_sigma_sec"] == 1.2
+
+
+def test_face_guided_crop_places_face_in_upper_portrait_with_headroom():
+    zx, zy, crop_w, crop_h = fc._resolve_crop_window(
+        x_pos=1000,
+        zoom=1.6,
+        vertical_width=1214,
+        vertical_height=2160,
+        original_width=4096,
+        original_height=2160,
+        face_center_y=780,
+        face_height=180,
+        face_target_y_ratio=0.22,
+        headroom_face_heights=0.55,
+    )
+
+    face_y_in_crop = 780 - zy
+    face_top_in_crop = 780 - 90 - zy
+    assert abs(face_y_in_crop / crop_h - 0.22) < 0.01
+    assert face_top_in_crop >= 0.55 * 180
+    assert (zx, crop_w, crop_h) == (1228, 758, 1350)
+
+
+def test_pixel_exact_hd_portrait_crop_uses_1080_by_1920_source_pixels():
+    _zx, _zy, crop_w, crop_h = fc._resolve_crop_window(
+        x_pos=1000,
+        zoom=1214 / 1080,
+        vertical_width=1214,
+        vertical_height=2160,
+        original_width=4096,
+        original_height=2160,
+        face_center_y=500,
+        face_height=160,
+        face_target_y_ratio=0.22,
+        headroom_face_heights=0.55,
+    )
+
+    assert (crop_w, crop_h) == (1080, 1920)
+
+
+def test_face_guided_crop_clamps_to_source_top_instead_of_cutting_high_face():
+    _zx, zy, _crop_w, crop_h = fc._resolve_crop_window(
+        x_pos=1000,
+        zoom=1.6,
+        vertical_width=1214,
+        vertical_height=2160,
+        original_width=4096,
+        original_height=2160,
+        vertical_anchor_ratio=0.65,
+        face_center_y=150,
+        face_height=120,
+        face_target_y_ratio=0.22,
+        headroom_face_heights=0.55,
+    )
+
+    assert zy == 0
+    assert 0 < 150 / crop_h < 0.22
+
+
+def test_default_profile_keeps_face_vertical_framing_disabled():
+    assert fc._DEFAULT_CROP_PROFILE["face_vertical_framing"] is False
+
+
 def test_missing_config_dir_falls_back_to_default(monkeypatch, tmp_path):
     monkeypatch.delenv("CAMERA_CROP_PROFILE_FILE", raising=False)
     monkeypatch.setenv("CAMERA_CROP_CONFIG_DIR", str(tmp_path / "does_not_exist"))
@@ -165,7 +253,47 @@ def test_movement_aware_effects_never_place_close_ups_on_moving_frames():
 
     assert effects, "expected at least one planned effect"
     for etype, es, ee, _params in effects:
-        if etype in ("jump_close", "jump_xcu"):
-            assert is_static[es:ee].all(), (
-                f"{etype} at [{es},{ee}) overlaps a moving stretch"
-            )
+        assert is_static[es:ee].all(), (
+            f"{etype} at [{es},{ee}) overlaps a moving stretch"
+        )
+
+
+def test_content_aware_effects_cut_on_strongest_quiet_semantic_beats():
+    fps = 25
+    total_frames = 40 * fps
+    is_static = np.ones(total_frames, dtype=bool)
+    cues = [
+        {"time_sec": 5.0, "strength": 2, "reason": "new_beat_after_pause"},
+        {"time_sec": 17.0, "strength": 3, "reason": "spoken_emphasis"},
+        {"time_sec": 30.0, "strength": 4, "reason": "payoff"},
+    ]
+
+    effects = fc._plan_camera_effects_content_aware(
+        total_frames,
+        fps,
+        is_static,
+        cues,
+        effect_interval_range_sec=(6.0, 8.0),
+    )
+
+    assert [effect[0] for effect in effects] == ["jump_mid", "jump_close", "jump_xcu"]
+    assert [effect[3]["reason"] for effect in effects] == [
+        "new_beat_after_pause", "spoken_emphasis", "payoff"
+    ]
+    assert all(is_static[start:end].all() for _, start, end, _ in effects)
+
+
+def test_content_aware_effect_rejects_a_semantic_beat_during_motion():
+    fps = 25
+    total_frames = 20 * fps
+    is_static = np.ones(total_frames, dtype=bool)
+    is_static[int(7.0 * fps):int(11.0 * fps)] = False
+
+    effects = fc._plan_camera_effects_content_aware(
+        total_frames,
+        fps,
+        is_static,
+        [{"time_sec": 8.0, "strength": 4, "reason": "payoff"}],
+    )
+
+    assert effects == []

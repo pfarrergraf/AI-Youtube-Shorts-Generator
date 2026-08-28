@@ -124,8 +124,16 @@ def execute_jobs(prepared: list[dict], *, quality: str, size: str, confirm_count
         references = [Path(value) for value in entry["payload"]["references"]]
         generate_image(prompt, output, reference_images=references, size=size, quality=quality)
         job["status"] = "manual_review_required"
+        job["approved"] = False
         completed += 1
         job_path.write_text(json.dumps(entry["payload"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    for entry in prepared:
+        entry["payload"]["status"] = "manual_review_required"
+        entry["payload"]["approved"] = False
+        entry["job_path"].write_text(
+            json.dumps(entry["payload"], ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     return completed
 
 

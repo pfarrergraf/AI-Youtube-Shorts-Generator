@@ -342,6 +342,113 @@ def _cover_resize(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     return resized.crop((left, top, left + tw, top + th))
 
 
+def _detect_largest_face_box(image: Image.Image) -> tuple[int, int, int, int] | None:
+    """Detect the largest face on the selected, final-size hero plate."""
+    try:
+        import cv2  # noqa: PLC0415
+
+        rgb = np.asarray(image.convert("RGB"), dtype=np.uint8)
+        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+        model_root = Path(__file__).resolve().parents[1] / "models"
+        prototxt = model_root / "deploy.prototxt"
+        weights = model_root / "res10_300x300_ssd_iter_140000_fp16.caffemodel"
+        if prototxt.is_file() and weights.is_file():
+            net = cv2.dnn.readNetFromCaffe(str(prototxt), str(weights))
+            blob = cv2.dnn.blobFromImage(
+                cv2.resize(bgr, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0)
+            )
+            net.setInput(blob)
+            detections = net.forward()[0, 0]
+            candidates = []
+            for detection in detections:
+                if float(detection[2]) < 0.55:
+                    continue
+                x1, y1, x2, y2 = detection[3:7] * np.array(
+                    [image.width, image.height, image.width, image.height]
+                )
+                x1, y1 = max(0, int(x1)), max(0, int(y1))
+                x2, y2 = min(image.width, int(x2)), min(image.height, int(y2))
+                if x2 > x1 and y2 > y1:
+                    candidates.append((x1, y1, x2 - x1, y2 - y1))
+            if candidates:
+                return max(candidates, key=lambda box: box[2] * box[3])
+        cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
+        min_side = max(48, min(image.size) // 12)
+        faces = cascade.detectMultiScale(gray, 1.1, 5, minSize=(min_side, min_side))
+        if len(faces):
+            return tuple(int(value) for value in max(faces, key=lambda box: box[2] * box[3]))
+    except Exception:
+        pass
+    return None
+
+
+def _padded_face_box(
+    face_box: tuple[int, int, int, int],
+    size: tuple[int, int],
+) -> tuple[int, int, int, int]:
+    """Expand an ``x,y,w,h`` face into a strict no-type ``x1,y1,x2,y2`` zone."""
+    x, y, fw, fh = face_box
+    w, h = size
+    pad_x = max(24, int(round(fw * 0.12)))
+    pad_y = max(32, int(round(fh * 0.18)))
+    return (
+        max(0, x - pad_x),
+        max(0, y - pad_y),
+        min(w, x + fw + pad_x),
+        min(h, y + fh + pad_y),
+    )
+
+
+def _boxes_overlap(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
+    return min(a[2], b[2]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[1], b[1])
+
+
+def _layout_title_outside_face(
+    hook: str,
+    *,
+    size: tuple[int, int],
+    accent_line: int | None,
+    accent_color: str,
+    font: str,
+    text_anchor: str,
+    seed: int,
+    face_box: tuple[int, int, int, int] | None,
+) -> tuple[TypeLayout, tuple[int, int, int, int] | None, bool]:
+    """Render the title in the first lane that does not touch the face zone."""
+    preferred = 0.045 if text_anchor == "top" else 0.53
+    safe_box = _padded_face_box(face_box, size) if face_box is not None else None
+    candidates = [preferred]
+    if face_box is not None:
+        candidates.extend([
+            0.53 if text_anchor == "top" else 0.045,
+            min(0.78, (safe_box[3] + 2) / max(1, size[1])),
+            0.02,
+        ])
+
+    first = None
+    for max_cap_ratio in (0.152, 0.145, 0.135, 0.125):
+        for block_top in dict.fromkeys(round(value, 5) for value in candidates):
+            layout = layout_and_render(
+                hook,
+                canvas_size=size,
+                accent_line=accent_line,
+                accent_color=accent_color,
+                font=font,
+                block_top_ratio=block_top,
+                max_cap_ratio=max_cap_ratio,
+                seed=seed,
+            )
+            first = first or layout
+            x1, y1, x2, y2 = layout.block_box
+            within_canvas = x1 >= 0 and y1 >= 0 and x2 <= size[0] and y2 <= size[1]
+            if within_canvas and (safe_box is None or not _boxes_overlap(layout.block_box, safe_box)):
+                return layout, safe_box, block_top != preferred
+    return first, safe_box, False
+
+
 def frame_subject(
     subject_rgba: Image.Image,
     face_box: tuple[int, int, int, int] | None,
@@ -515,23 +622,13 @@ def compose(
         # The generated plate already contains the (synthetic) person.
         subject_rgba = None
 
-    block_top = 0.045 if text_anchor == "top" else 0.53
-    type_layout = layout_and_render(
-        hook,
-        canvas_size=size,
-        accent_line=accent_line,
-        accent_color=recipe["accent"],
-        font=font,
-        block_top_ratio=block_top,
-        seed=seed,
-    )
-
     # Learn where the speaker's face will land on canvas *before* compositing
     # anything, so the title split can be decided by real face geometry
     # instead of an anchor-only guess. The face — never the rest of the title
     # block — is what must always end up in front.
     framed = None
     canvas_face_band = None
+    canvas_face_box = None
     speaker_placement = None
     if subject_rgba is not None:
         framed = frame_subject(
@@ -560,8 +657,30 @@ def compose(
             bottom_ratio=bottom_ratio,
         )
         if subject_face_box is not None:
-            _, fy, _, fh = subject_face_box
+            fx, fy, fw, fh = subject_face_box
             canvas_face_band = (sy + fy * scale, sy + (fy + fh) * scale)
+            canvas_face_box = (
+                int(round(sx + fx * scale)),
+                int(round(sy + fy * scale)),
+                max(1, int(round(fw * scale))),
+                max(1, int(round(fh * scale))),
+            )
+    elif speaker_render in {"ai_hero", "ai_repertoire"}:
+        canvas_face_box = _detect_largest_face_box(canvas)
+        if canvas_face_box is not None:
+            _, fy, _, fh = canvas_face_box
+            canvas_face_band = (fy, fy + fh)
+
+    type_layout, face_safe_box, title_relocated = _layout_title_outside_face(
+        hook,
+        size=size,
+        accent_line=accent_line,
+        accent_color=recipe["accent"],
+        font=font,
+        text_anchor=text_anchor,
+        seed=seed,
+        face_box=canvas_face_box,
+    )
 
     back_flags = _face_aware_back_flags(
         type_layout.lines,
@@ -609,12 +728,16 @@ def compose(
         text_alpha=type_layout.alpha,
         text_block_box=type_layout.block_box,
         cap_height_px=type_layout.mean_cap_height,
-        face_box=face_box,
+        face_box=canvas_face_box,
         subject_alpha=placed_alpha,
         line_fill_ratio=max((ln.fill_ratio for ln in type_layout.lines), default=0.0),
         accent_present=accent_line is not None,
         bands=load_bands(),
     )
+    if face_safe_box is not None and _boxes_overlap(type_layout.block_box, face_safe_box):
+        if "face_not_covered" not in gate.hard_failures:
+            gate.hard_failures.append("face_not_covered")
+        gate.passed = False
 
     story_focus_box = story_layers.get("story_focus_box")
     if story_focus_box and placed_alpha is not None:
@@ -640,6 +763,9 @@ def compose(
             "subject_box": list(subject_box) if subject_box else None,
             "speaker_layout": speaker_layout,
             "text_anchor": text_anchor,
+            "title_relocated_for_face": title_relocated,
+            "face_box": list(canvas_face_box) if canvas_face_box else None,
+            "face_safe_box": list(face_safe_box) if face_safe_box else None,
             "seed": seed,
             **render_info,
         },

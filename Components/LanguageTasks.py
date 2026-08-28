@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import time
+import unicodedata
 import urllib.request
 import urllib.error
 
@@ -29,6 +30,19 @@ def _first_env(*names, default=None):
     return default
 
 
+def _registry_model_for_role(role):
+    """Resolve the serving name from the shared role registry when available."""
+    path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config", "model_registry.json"))
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            registry = _json.load(handle)
+        model_key = registry.get("roles", {}).get(role)
+        model = registry.get("models", {}).get(model_key, {})
+        return model.get("served_model_name") or model.get("model")
+    except (OSError, ValueError, TypeError):
+        return None
+
+
 # Prefer local vLLM naming, keep OpenAI-compatible names as compatibility fallbacks.
 api_key = _first_env(
     "VLLM_API_KEY",
@@ -44,11 +58,12 @@ api_base = _first_env(
     "OPENAI_API_BASE",
     default="http://127.0.0.1:1234/v1",
 )
+model_role = _first_env("LLM_ROLE", default="highlight_analysis_de")
 model_name = _first_env(
     "VLLM_MODEL",
     "LOCAL_LLM_MODEL",
     "LLM_MODEL",
-    default="qwen2.5-72b-instruct",
+    default=_registry_model_for_role(model_role) or "qwen2.5-72b-instruct",
 )
 
 
@@ -1495,6 +1510,546 @@ speaker_side must be one of: left, right, center_low, auto
 background_style must be one of: clean_gradient, strong_contrast, emotion_focus
 
 Return JSON only. No markdown fences."""
+
+
+# This profile is deliberately additive: production still uses
+# ``GenerateThumbnailBrief`` until its text-only A/B evaluation is reviewed.
+SERMON_THUMBNAIL_HEADLINE_V2_PROFILE = "sermon_thumbnail_headline_v2"
+SERMON_THUMBNAIL_HEADLINE_V2_PROMPT = """\
+You are the headline and thumbnail-hook editor for a high-quality Christian sermon and short-form video channel.
+
+Your job is NOT to summarize the transcript. Identify the strongest emotional,
+theological, rhetorical, narrative or surprising idea in the supplied clip and
+turn it into highly memorable German thumbnail hooks and social-media titles.
+The transcript is the source of truth. Never invent a claim, promise, event,
+quotation, miracle, theological statement or emotional conclusion that the
+transcript does not support.
+
+PRIMARY GOAL: make a viewer stop scrolling because the text creates relevance,
+surprise, tension, a strong formulation or a legitimate question. Do not
+optimize for traditional sermon titles; optimize for Shorts, Reels and TikTok.
+
+THUMBNAIL HOOK: German; ideally 2–5 words, at most 6 words and roughly 38
+characters; understandable in under one second; one dominant thought; strong
+rhythm; no unnecessary punctuation, speaker/church name, hashtags or generic
+category descriptions. Prefer verbs, concrete nouns, contrast, active voice,
+spoken German, emotional precision and controlled incompleteness.
+
+SOCIAL TITLE: German; normally 5–12 words and preferably under 75 characters;
+understandable without sermon context; may contain a question, contrast or a
+mini-open-loop. Do not normally generate the speaker name.
+
+Generate genuinely different candidates where supported: contradiction/reversal,
+direct challenge, open loop, identity, pain/human tension, biblical drama,
+quotable sentence, question, contrast and specific surprise. The three final
+thumbnail hooks must not be minor rewrites: prefer one direct, one curiosity
+and one rhetorical/emotional version.
+
+Avoid abstract church language, explanatory subtitles, empty superlatives,
+fake shock, vague motivational clichés and unsupported clickbait. In particular
+avoid wording such as "Die Bedeutung von", "Die Rolle von", "Wie X uns hilft",
+"Eine Geschichte über", "Gedanken zu", "inspirierend", "kraftvoll",
+"lebensverändernd", "unglaublich", "mächtig" and "bahnbrechend" unless the
+literal source requires it. Christian content may name Jesus, Gott, Sünde or
+Gnade when grounded, but do not insert terminology just to sound religious.
+
+TRUTHFULNESS GATE: reject a candidate when the transcript does not support it,
+it promises a payoff the clip never gives, attributes unsupported words to
+Jesus/Gott, turns a possibility into certainty, sensationalizes suffering,
+changes the speaker's theology, or needs unavailable context.
+
+Internally identify central payoff, strongest sentence/image, emotional tension
+and possible reversal; generate at least 12 distinct candidates, eliminate weak
+ones and score the rest for stop power, clarity, tension, emotion, specificity,
+rhythm, visual fit and source fidelity. Do not expose private reasoning.
+
+Return valid JSON only, exactly this structure:
+{
+  "core_message": "one concise sentence",
+  "emotional_tension": "one concise sentence",
+  "strongest_angle": "short description",
+  "thumbnail_hooks": [
+    {"text": "HOOK", "angle": "direct_challenge", "score": 94},
+    {"text": "HOOK", "angle": "open_loop", "score": 91},
+    {"text": "HOOK", "angle": "quotable", "score": 89}
+  ],
+  "social_titles": [
+    {"text": "Social title", "score": 93},
+    {"text": "Social title", "score": 90},
+    {"text": "Social title", "score": 87}
+  ]
+}
+Do not return markdown. Do not add explanations outside the JSON."""
+
+
+def _parse_json_object_response(raw):
+    """Parse a local-model JSON object even when it wrapped it in Markdown."""
+    cleaned = re.sub(r"<think>.*?</think>", "", str(raw or ""), flags=re.DOTALL).strip()
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    start, end = cleaned.find("{"), cleaned.rfind("}")
+    if start >= 0 and end > start:
+        cleaned = cleaned[start:end + 1]
+    payload = _json.loads(cleaned)
+    if not isinstance(payload, dict):
+        raise ValueError("LLM response is not a JSON object")
+    return payload
+
+
+def GenerateSermonThumbnailHeadlineV2(
+    clip_content,
+    *,
+    clip_transcript="",
+    highlight=None,
+    video_title="",
+    language="de",
+    temperature=0.5,
+    retries=3,
+):
+    """Text-only candidate generator for the headline A/B harness.
+
+    It intentionally receives full highlight metadata (not just the first 800
+    transcript characters), returns raw provenance for evaluation, and has no
+    production caller yet.
+    """
+    highlight = highlight if isinstance(highlight, dict) else {}
+    context = {
+        "video_title": str(video_title or ""),
+        "language": str(language or "de"),
+        "content_summary": str(clip_content or highlight.get("content") or ""),
+        "highlight_title": str(highlight.get("title") or ""),
+        "existing_hook": str(highlight.get("hook") or ""),
+        "payoff_excerpt": str(highlight.get("payoff_excerpt") or ""),
+        "suggested_caption": str(highlight.get("suggested_caption") or ""),
+        "clip_transcript": str(clip_transcript or highlight.get("transcript_excerpt") or ""),
+    }
+    user_msg = "Supplied clip context (source material):\n" + _json.dumps(
+        context, ensure_ascii=False, indent=2
+    )
+    failures = []
+    for attempt in range(1, max(1, int(retries)) + 1):
+        try:
+            raw = _call_llm(
+                SERMON_THUMBNAIL_HEADLINE_V2_PROMPT,
+                user_msg,
+                temperature=float(temperature),
+                _retries=1,
+            )
+            payload = _parse_json_object_response(raw)
+            hooks = payload.get("thumbnail_hooks")
+            titles = payload.get("social_titles")
+            if not isinstance(hooks, list) or not isinstance(titles, list):
+                raise ValueError("missing thumbnail_hooks or social_titles arrays")
+            return {
+                "ok": True,
+                "profile": SERMON_THUMBNAIL_HEADLINE_V2_PROFILE,
+                "attempt": attempt,
+                "payload": payload,
+                "raw_response": raw,
+                "failures": failures,
+            }
+        except Exception as exc:
+            failures.append(f"attempt {attempt}: {type(exc).__name__}: {exc}")
+    return {
+        "ok": False,
+        "profile": SERMON_THUMBNAIL_HEADLINE_V2_PROFILE,
+        "payload": None,
+        "raw_response": "",
+        "failures": failures,
+    }
+
+
+SERMON_THUMBNAIL_HEADLINE_V3_PROFILE = "sermon_thumbnail_headline_v3"
+_HEADLINE_PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts")
+SERMON_THUMBNAIL_HEADLINE_V3_PROMPT_PATH = os.path.join(
+    _HEADLINE_PROMPT_DIR, "sermon_thumbnail_headline_v3.txt"
+)
+SERMON_THUMBNAIL_HEADLINE_SELECTOR_V3_PROMPT_PATH = os.path.join(
+    _HEADLINE_PROMPT_DIR, "sermon_thumbnail_headline_selector_v3.txt"
+)
+_HEADLINE_V3_ANGLES = (
+    "source_quote", "question", "contrast", "direct", "concrete_detail",
+    "tension", "payoff", "ultra_short",
+)
+_HEADLINE_META_PATTERNS = (
+    r"\bdie bedeutung von\b", r"\bdie rolle von\b", r"\beine geschichte über\b",
+    r"\bgedanken zu\b", r"\bdiese predigt\b", r"\bdieser clip\b",
+    r"\bin diesem (?:clip|video)\b", r"\bpredigt über\b",
+)
+_HEADLINE_BRAND_NAMES = (
+    "kanzelclips", "move church", "st. martini", "icf zürich", "icf zurich",
+)
+_SENSITIVE_TOPIC_TERMS = {
+    "holocaust_genocide": ("holocaust", "auschwitz", "genozid", "völkermord"),
+    "suicide": ("suizid", "selbstmord", "selbsttötung"),
+    "abortion": ("abtreibung", "abtreibungsversuch", "abtreiben", "abgetrieben"),
+    "abuse": ("missbrauch", "misshandelt", "misshandlung"),
+    "death": ("tod", "tödlich", "gestorben", "sterben", "grab"),
+    "severe_illness": ("krebs", "krebsdiagnose", "tumor", "schwere krankheit"),
+    "mental_health": (
+        "psychische erkrankung", "depression", "panikattacke", "panikattacken",
+        "psychose", "schizophrenie",
+    ),
+    "trauma": ("trauma", "traumatisch", "traumatisiert"),
+}
+
+
+def _load_headline_prompt(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        prompt = handle.read().strip()
+    if not prompt:
+        raise ValueError(f"empty headline prompt: {path}")
+    return prompt
+
+
+def BuildSermonHeadlineSourceV3(
+    clip_content,
+    *,
+    clip_transcript="",
+    highlight=None,
+    video_title="",
+    current_thumbnail_title="",
+    language="de",
+):
+    """Build the complete text-only source packet shared by generator/selector."""
+    highlight = highlight if isinstance(highlight, dict) else {}
+    return {
+        "language": str(language or "de"),
+        "video_title": str(video_title or ""),
+        "content_summary": str(clip_content or highlight.get("content") or ""),
+        "highlight_title": str(highlight.get("title") or ""),
+        "highlight_hook": str(highlight.get("hook") or ""),
+        "payoff_excerpt": str(highlight.get("payoff_excerpt") or ""),
+        "suggested_caption": str(highlight.get("suggested_caption") or ""),
+        "current_thumbnail_title": str(current_thumbnail_title or ""),
+        "clip_transcript": str(
+            clip_transcript or highlight.get("transcript_excerpt") or ""
+        ),
+    }
+
+
+def DetectSensitiveHeadlineTopicsV3(source_material):
+    """Conservatively label sensitive subjects without suppressing them."""
+    source_text = " ".join(str(value or "") for value in source_material.values()).casefold()
+    topics = []
+    for topic, terms in _SENSITIVE_TOPIC_TERMS.items():
+        if any(re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", source_text) for term in terms):
+            topics.append(topic)
+    return {"sensitive_topic": bool(topics), "sensitive_topics": topics}
+
+
+def _headline_words_v3(value):
+    return re.findall(r"[0-9A-Za-zÄÖÜäöüß]+(?:['’][0-9A-Za-zÄÖÜäöüß]+)?", str(value or ""))
+
+
+def _headline_contains_identity_v3(title, identities):
+    folded = str(title or "").casefold()
+    for identity in identities:
+        identity_words = [word.casefold() for word in _headline_words_v3(identity)]
+        if not identity_words:
+            continue
+        if " ".join(identity_words) in folded:
+            return True
+        if len(identity_words) > 1 and any(
+            re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", folded)
+            for word in identity_words if len(word) >= 4
+        ):
+            return True
+    return False
+
+
+def ValidateSermonHeadlineCandidateV3(
+    candidate,
+    *,
+    source_text="",
+    speaker="",
+    channel="",
+    require_anchor=True,
+    require_accent=True,
+):
+    """Apply non-negotiable gates before a candidate can reach the selector."""
+    candidate = candidate if isinstance(candidate, dict) else {}
+    title = " ".join(str(candidate.get("title") or "").split())
+    accent = " ".join(str(candidate.get("accent_word") or "").split())
+    anchor = " ".join(str(candidate.get("source_anchor") or "").split())
+    angle = str(candidate.get("angle") or "").strip()
+    reasons = []
+    title_words = _headline_words_v3(title)
+
+    if not title:
+        reasons.append("empty")
+    if title and len(title_words) < 2:
+        reasons.append("too_few_words")
+    if len(title_words) > 5:
+        reasons.append("too_many_words")
+    if len(title) > 28:
+        reasons.append("too_long")
+    if title.endswith(("…", "...", "-", "–", "—", "/")):
+        reasons.append("truncated_word")
+    if any(
+        char == "\ufffd" or unicodedata.category(char) in {"Cc", "Cs", "Co", "So"}
+        for char in title
+    ):
+        reasons.append("unsafe_unicode")
+    if "#" in title or any(char == "#" for char in accent):
+        reasons.append("hashtag")
+    if any(re.search(pattern, title.casefold()) for pattern in _HEADLINE_META_PATTERNS):
+        reasons.append("meta_phrase")
+    if _headline_contains_identity_v3(title, [speaker]):
+        reasons.append("speaker_name")
+    if _headline_contains_identity_v3(title, list(_HEADLINE_BRAND_NAMES) + [channel]):
+        reasons.append("brand_name")
+    if require_accent and accent not in title_words:
+        reasons.append("accent_missing")
+    if require_anchor and not anchor:
+        reasons.append("anchor_empty")
+    if require_anchor and anchor and anchor.casefold() not in str(source_text or "").casefold():
+        reasons.append("anchor_not_found")
+    if require_anchor and angle not in _HEADLINE_V3_ANGLES:
+        reasons.append("angle_invalid")
+
+    normalized = dict(candidate)
+    normalized.update({"title": title, "accent_word": accent, "angle": angle, "source_anchor": anchor})
+    return {"valid": not reasons, "reasons": reasons, "candidate": normalized}
+
+
+def _sensitive_headline_reasons_v3(title, source_text, sensitive_topics):
+    """Block a small set of known high-risk semantic transformations."""
+    folded = str(title or "").casefold()
+    source_folded = str(source_text or "").casefold()
+    topics = set(sensitive_topics or [])
+    reasons = []
+    if "severe_illness" in topics and "krebs" in folded and "freude" in folded:
+        if not any(marker in folded for marker in ("trotz", "woher", "wieso")):
+            reasons.append("sensitive_causality_risk")
+    if "holocaust_genocide" in topics:
+        risky = (
+            ("asche" in folded and ("neugeburt" in folded or "neu geboren" in folded)),
+            ("holocaust" in folded and any(term in folded for term in ("überwand", "überwunden", "besiegt"))),
+        )
+        if any(risky):
+            reasons.append("sensitive_sensationalism")
+    loaded_terms = ("verrat", "schuld", "heilung", "wunder")
+    if topics and any(term in folded and term not in source_folded for term in loaded_terms):
+        reasons.append("sensitive_ungrounded_claim")
+    return reasons
+
+
+def GenerateHeadlineCandidatesV3(
+    clip_content,
+    *,
+    clip_transcript="",
+    highlight=None,
+    video_title="",
+    current_thumbnail_title="",
+    speaker="",
+    channel="",
+    language="de",
+    temperature=0.5,
+    max_retries=2,
+):
+    """Generate eight challengers, repair invalid sets, and preserve audit data."""
+    source_material = BuildSermonHeadlineSourceV3(
+        clip_content,
+        clip_transcript=clip_transcript,
+        highlight=highlight,
+        video_title=video_title,
+        current_thumbnail_title=current_thumbnail_title,
+        language=language,
+    )
+    source_text = "\n".join(str(value or "") for value in source_material.values())
+    sensitive = DetectSensitiveHeadlineTopicsV3(source_material)
+    prompt = _load_headline_prompt(SERMON_THUMBNAIL_HEADLINE_V3_PROMPT_PATH)
+    base_user_msg = "Quellmaterial:\n" + _json.dumps(source_material, ensure_ascii=False, indent=2)
+    attempts = []
+    repair_reasons = []
+    max_calls = 1 + max(0, int(max_retries))
+
+    for attempt_number in range(1, max_calls + 1):
+        user_msg = base_user_msg
+        if repair_reasons:
+            user_msg += (
+                "\n\nREPAIR: Der vorige Versuch wurde verworfen. Erzeuge alle acht Kandidaten neu "
+                "und behebe diese deterministischen Fehler:\n- " + "\n- ".join(repair_reasons)
+            )
+        try:
+            raw = _call_llm(prompt, user_msg, temperature=float(temperature), _retries=1)
+            payload = _parse_json_object_response(raw)
+            raw_candidates = payload.get("candidates")
+            if not isinstance(raw_candidates, list):
+                raise ValueError("missing candidates array")
+            validations = []
+            seen_angles = set()
+            seen_titles = set()
+            for index, item in enumerate(raw_candidates, 1):
+                candidate = dict(item) if isinstance(item, dict) else {}
+                candidate["id"] = f"v3_{index}"
+                validation = ValidateSermonHeadlineCandidateV3(
+                    candidate,
+                    source_text=source_text,
+                    speaker=speaker,
+                    channel=channel,
+                )
+                validation["reasons"].extend(_sensitive_headline_reasons_v3(
+                    validation["candidate"].get("title", ""), source_text,
+                    sensitive["sensitive_topics"],
+                ))
+                angle = validation["candidate"].get("angle")
+                title_key = validation["candidate"].get("title", "").casefold()
+                if angle in seen_angles:
+                    validation["reasons"].append("duplicate_angle")
+                if title_key and title_key in seen_titles:
+                    validation["reasons"].append("duplicate_title")
+                validation["valid"] = not validation["reasons"]
+                seen_angles.add(angle)
+                seen_titles.add(title_key)
+                validations.append(validation)
+            if len(raw_candidates) != 8:
+                repair_reasons = [f"candidate_count:{len(raw_candidates)} (required:8)"]
+            else:
+                repair_reasons = [
+                    f"{entry['candidate'].get('id')}:{','.join(entry['reasons'])}"
+                    for entry in validations if not entry["valid"]
+                ]
+            attempts.append({
+                "attempt": attempt_number,
+                "raw_response": raw,
+                "raw_candidates": [entry["candidate"] for entry in validations],
+                "rejected": [entry for entry in validations if not entry["valid"]],
+                "valid_candidates": [entry["candidate"] for entry in validations if entry["valid"]],
+                "repair_reasons": list(repair_reasons),
+            })
+            if not repair_reasons:
+                break
+        except Exception as exc:
+            repair_reasons = [f"parse_failure:{type(exc).__name__}:{exc}"]
+            attempts.append({
+                "attempt": attempt_number, "raw_response": "", "raw_candidates": [],
+                "rejected": [], "valid_candidates": [], "repair_reasons": list(repair_reasons),
+            })
+
+    final = attempts[-1]
+    return {
+        "ok": bool(final["valid_candidates"]),
+        "profile": SERMON_THUMBNAIL_HEADLINE_V3_PROFILE,
+        "source_material": source_material,
+        **sensitive,
+        "attempts": attempts,
+        "generator_calls": len(attempts),
+        "retries": max(0, len(attempts) - 1),
+        "raw_candidates": final["raw_candidates"],
+        "rejected": final["rejected"],
+        "valid_candidates": final["valid_candidates"],
+        "parse_failures": sum(
+            any(reason.startswith("parse_failure:") for reason in item["repair_reasons"])
+            for item in attempts
+        ),
+    }
+
+
+def SelectHeadlineWinnerV3(
+    *,
+    source_material,
+    current_champion=None,
+    valid_challengers=None,
+    sensitive_topic=False,
+    speaker="",
+    channel="",
+    retries=2,
+):
+    """Select conservatively from already validated titles at temperature zero."""
+    source_text = "\n".join(str(value or "") for value in source_material.values())
+    candidates = []
+    champion_validation = None
+    if isinstance(current_champion, dict):
+        champion = dict(current_champion)
+        champion["id"] = "current_champion"
+        champion_validation = ValidateSermonHeadlineCandidateV3(
+            champion,
+            source_text=source_text,
+            speaker=speaker,
+            channel=channel,
+            require_anchor=False,
+            require_accent=False,
+        )
+        if champion_validation["valid"]:
+            candidates.append({**champion_validation["candidate"], "source": "current_champion"})
+    for challenger in valid_challengers or []:
+        candidates.append({**challenger, "source": "v3_challenger"})
+    if not candidates:
+        return {
+            "ok": False, "payload": None, "failures": ["no validated candidates"],
+            "current_champion_validation": champion_validation, "selector_calls": 0,
+        }
+
+    allowed = {candidate["id"]: candidate for candidate in candidates}
+    prompt = _load_headline_prompt(SERMON_THUMBNAIL_HEADLINE_SELECTOR_V3_PROMPT_PATH)
+    base_user_msg = "Auswahlpaket:\n" + _json.dumps({
+        "source_material": source_material,
+        "sensitive_topic": bool(sensitive_topic),
+        "current_champion": next((item for item in candidates if item["source"] == "current_champion"), None),
+        "valid_challengers": [item for item in candidates if item["source"] == "v3_challenger"],
+    }, ensure_ascii=False, indent=2)
+    failures = []
+    calls = 0
+    for attempt in range(1, max(1, int(retries)) + 1):
+        calls += 1
+        try:
+            user_msg = base_user_msg
+            if failures:
+                user_msg += (
+                    "\n\nREPAIR: Die vorige Antwort war technisch unzulässig. Behebe: "
+                    + failures[-1]
+                )
+            raw = _call_llm(prompt, user_msg, temperature=0.0, _retries=1)
+            payload = _parse_json_object_response(raw)
+            winner_id = str(payload.get("winner_id") or "")
+            runner_up_id = str(payload.get("runner_up_id") or "")
+            if winner_id not in allowed:
+                raise ValueError("winner_id is not a validated candidate")
+            expected_source = allowed[winner_id]["source"]
+            if payload.get("winner_source") != expected_source:
+                raise ValueError("winner_source does not match winner_id")
+            if runner_up_id and runner_up_id not in allowed:
+                raise ValueError("runner_up_id is not a validated candidate")
+            social_title = " ".join(str(payload.get("social_title") or "").split())
+            if not social_title or len(social_title) > 90:
+                raise ValueError("social_title must contain 1-90 characters")
+            if "#" in social_title:
+                raise ValueError("social_title must not contain hashtags")
+            if any(
+                char == "\ufffd" or unicodedata.category(char) in {"Cc", "Cs", "Co", "So"}
+                for char in social_title
+            ):
+                raise ValueError("social_title contains unsafe Unicode or emoji")
+            if _headline_contains_identity_v3(social_title, [speaker]):
+                raise ValueError("social_title must not contain the speaker name")
+            if _headline_contains_identity_v3(
+                social_title, list(_HEADLINE_BRAND_NAMES) + [channel]
+            ):
+                raise ValueError("social_title must not contain a brand name")
+            sensitive_reasons = _sensitive_headline_reasons_v3(
+                social_title, source_text,
+                DetectSensitiveHeadlineTopicsV3(source_material)["sensitive_topics"]
+                if sensitive_topic else [],
+            )
+            if sensitive_reasons:
+                raise ValueError(
+                    "social_title failed sensitive guard: " + ",".join(sensitive_reasons)
+                )
+            payload["social_title"] = social_title
+            payload["winner_title"] = allowed[winner_id]["title"]
+            return {
+                "ok": True, "payload": payload, "raw_response": raw,
+                "failures": failures, "selector_calls": calls,
+                "current_champion_validation": champion_validation,
+            }
+        except Exception as exc:
+            failures.append(f"attempt {attempt}: {type(exc).__name__}: {exc}")
+    return {
+        "ok": False, "payload": None, "raw_response": "", "failures": failures,
+        "selector_calls": calls, "current_champion_validation": champion_validation,
+    }
 
 
 def GenerateTitleHook(clip_content, clip_transcript="", video_title="", language="de"):

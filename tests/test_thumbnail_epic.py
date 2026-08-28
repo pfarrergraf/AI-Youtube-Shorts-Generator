@@ -264,6 +264,25 @@ def test_repertoire_composer_uses_text_free_hero():
     assert result.info["repertoire"]["text_free"] is True
 
 
+@pytest.mark.parametrize("hook", ["Reale Probleme", "WASSER STEIGT"])
+def test_repertoire_title_never_intersects_benjamin_face(hook):
+    import hashlib
+
+    seed = int.from_bytes(hashlib.sha256(hook.encode("utf-8")).digest()[:2], "big")
+    result = compose(
+        hook,
+        speaker_render="ai_repertoire",
+        speaker_name="Benjamin Graf",
+        seed=seed,
+    )
+
+    tx1, ty1, tx2, ty2 = result.type_layout.block_box
+    fx1, fy1, fx2, fy2 = result.info["face_safe_box"]
+    assert result.info["title_relocated_for_face"] is True
+    assert min(tx2, fx2) <= max(tx1, fx1) or min(ty2, fy2) <= max(ty1, fy1)
+    assert result.gate.passed
+
+
 def test_repertoire_without_hero_falls_back_to_real_procedural():
     result = compose(
         "ICH BIN BEREIT",
