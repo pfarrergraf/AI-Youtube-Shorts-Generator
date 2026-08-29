@@ -242,7 +242,16 @@ def test_epic_sweep_excludes_synthetic_hero():
     assert set(SPEAKER_LAYOUTS) == {"balanced", "closeup", "portrait"}
 
 
-@pytest.mark.parametrize("speaker", ["Antonio Weil", "Pastor Olaf Latzel"])
+@pytest.mark.parametrize(
+    "speaker",
+    [
+        "Antonio Weil",
+        "Pastor Olaf Latzel",
+        "Gideon Illner",
+        "Evi Wehrmann-Jablonski",
+        "Philipp Hönes",
+    ],
+)
 def test_approved_speaker_repertoire_loads(speaker):
     hero, info = load_speaker_hero(speaker, seed=1)
     assert hero is not None

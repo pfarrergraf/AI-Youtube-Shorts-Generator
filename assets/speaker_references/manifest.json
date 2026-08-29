@@ -798,6 +798,173 @@
           "approved": true
         }
       ]
+    },
+    "gideon_illner": {
+      "display_name": "Gideon Illner",
+      "source_images": [
+        {
+          "path": "gideon_illner/source/gideon_illner_official_jck.jpg",
+          "role": "official_identity",
+          "source_url": "https://jesus-centrum.de/wp-content/uploads/2024/12/Gideon-Illner-768x768.jpg"
+        },
+        {
+          "path": "gideon_illner/source/pose_frames/gideon_illner_video_front_932s.jpg",
+          "role": "sermon_identity_and_posture",
+          "source_url": "https://www.youtube.com/watch?v=0FGGz8aKSaE",
+          "source_timestamp_sec": 932
+        },
+        {
+          "path": "gideon_illner/source/pose_frames/gideon_illner_video_gesture_1218s.jpg",
+          "role": "sermon_gesture",
+          "source_url": "https://www.youtube.com/watch?v=0FGGz8aKSaE",
+          "source_timestamp_sec": 1218
+        },
+        {
+          "path": "gideon_illner/source/pose_frames/gideon_illner_video_story_1632s.jpg",
+          "role": "sermon_storytelling",
+          "source_url": "https://www.youtube.com/watch?v=0FGGz8aKSaE",
+          "source_timestamp_sec": 1632
+        }
+      ],
+      "heroes": [
+        {
+          "path": "gideon_illner/heroes/gideon_illner_ai_joyful_breakthrough_v1.png",
+          "variant": "joyful_breakthrough",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Identity matched against the official Jesus Centrum Kassel portrait and three frames from 0FGGz8aKSaE."
+        },
+        {
+          "path": "gideon_illner/heroes/gideon_illner_ai_prayerful_surrender_v1.png",
+          "variant": "prayerful_surrender",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Identity, glasses, hands and headset manually reviewed on 2026-08-29."
+        },
+        {
+          "path": "gideon_illner/heroes/gideon_illner_ai_direct_challenge_v1.png",
+          "variant": "direct_challenge",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Identity, hands and microphone manually reviewed on 2026-08-29."
+        }
+      ]
+    },
+    "evi_wehrmann_jablonski": {
+      "display_name": "Evi Wehrmann-Jablonski",
+      "source_images": [
+        {
+          "path": "evi_wehrmann_jablonski/source/evi_wehrmann_jablonski_official_gesundbrunnen.jpg",
+          "role": "official_identity",
+          "source_url": "https://www.gesundbrunnen.org/hofgeismar/Mitarbeiter/12026/image-thumb__12026__bild4cols/content-wehrmann-jablonski.jpg"
+        },
+        {
+          "path": "evi_wehrmann_jablonski/source/pose_frames/evi_video_front_1728s.jpg",
+          "role": "sermon_identity_and_posture",
+          "source_url": "https://www.youtube.com/watch?v=_A1vvj__fwQ",
+          "source_timestamp_sec": 1728
+        },
+        {
+          "path": "evi_wehrmann_jablonski/source/pose_frames/evi_video_gesture_169s.jpg",
+          "role": "sermon_gesture",
+          "source_url": "https://www.youtube.com/watch?v=_A1vvj__fwQ",
+          "source_timestamp_sec": 169
+        },
+        {
+          "path": "evi_wehrmann_jablonski/source/pose_frames/evi_video_sermon_1370s.jpg",
+          "role": "sermon_storytelling",
+          "source_url": "https://www.youtube.com/watch?v=_A1vvj__fwQ",
+          "source_timestamp_sec": 1370
+        }
+      ],
+      "heroes": [
+        {
+          "path": "evi_wehrmann_jablonski/heroes/evi_wehrmann_jablonski_ai_empathic_open_v1.png",
+          "variant": "empathic_open",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Identity matched against the official Gesundbrunnen portrait and three frames from _A1vvj__fwQ."
+        },
+        {
+          "path": "evi_wehrmann_jablonski/heroes/evi_wehrmann_jablonski_ai_joyful_breakthrough_v1.png",
+          "variant": "joyful_breakthrough",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Identity, hands, lectern and microphone manually reviewed on 2026-08-29."
+        },
+        {
+          "path": "evi_wehrmann_jablonski/heroes/evi_wehrmann_jablonski_ai_hopeful_invitation_v1.png",
+          "variant": "hopeful_invitation",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Identity, hands and microphone manually reviewed on 2026-08-29."
+        }
+      ]
+    },
+    "philipp_hoenes": {
+      "display_name": "Philipp Hönes",
+      "source_images": [
+        {
+          "path": "philipp_hoenes/source/philipp_hoenes_official_treffpunkt.webp",
+          "role": "official_identity",
+          "source_url": "https://treffpunkt-leben.de/img/lerne-uns-kennen/personen/philipp-hoenes_m.webp?v=3yfxs8"
+        },
+        {
+          "path": "philipp_hoenes/source/philipp_hoenes_cvents.jpg",
+          "role": "independent_identity",
+          "source_url": "https://www.cvents.eu/media/artist/image/p/h/phillip_ho_nes.jpg"
+        },
+        {
+          "path": "philipp_hoenes/source/pose_frames/philipp_video_front_450s.jpg",
+          "role": "sermon_identity_and_posture",
+          "source_url": "https://www.youtube.com/watch?v=hu0auS4BwmE",
+          "source_timestamp_sec": 450
+        },
+        {
+          "path": "philipp_hoenes/source/pose_frames/philipp_video_gesture_900s.jpg",
+          "role": "sermon_gesture",
+          "source_url": "https://www.youtube.com/watch?v=hu0auS4BwmE",
+          "source_timestamp_sec": 900
+        },
+        {
+          "path": "philipp_hoenes/source/pose_frames/philipp_video_story_1300s.jpg",
+          "role": "sermon_storytelling",
+          "source_url": "https://www.youtube.com/watch?v=hu0auS4BwmE",
+          "source_timestamp_sec": 1300
+        }
+      ],
+      "heroes": [
+        {
+          "path": "philipp_hoenes/heroes/philipp_hoenes_ai_joyful_breakthrough_v1.png",
+          "variant": "joyful_breakthrough",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Identity matched against the official Treffpunkt Leben portrait, the independent cvents portrait and three frames from hu0auS4BwmE."
+        },
+        {
+          "path": "philipp_hoenes/heroes/philipp_hoenes_ai_direct_challenge_v1.png",
+          "variant": "direct_challenge",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Identity, glasses, hands and microphone manually reviewed on 2026-08-29."
+        },
+        {
+          "path": "philipp_hoenes/heroes/philipp_hoenes_ai_hopeful_invitation_v1.png",
+          "variant": "hopeful_invitation",
+          "provider": "azure_openai_api",
+          "text_free": true,
+          "approved": true,
+          "review_note": "Identity, glasses, hands and microphone manually reviewed on 2026-08-29."
+        }
+      ]
     }
   }
 }

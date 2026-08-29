@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
+import re
 
 import numpy as np
 from PIL import Image
@@ -76,8 +77,10 @@ def _speaker_key(speaker_name: str | None) -> str:
         "olaf latzel": "olaf_latzel",
         "pastor olaf latzel": "olaf_latzel",
         "leo bigger": "leo_bigger_icf",
+        "philipp hönes": "philipp_hoenes",
+        "philipp hoenes": "philipp_hoenes",
     }
-    return aliases.get(value, value.replace(" ", "_")) if value else ""
+    return aliases.get(value, re.sub(r"[^\w]+", "_", value).strip("_")) if value else ""
 
 
 def load_speaker_hero(
