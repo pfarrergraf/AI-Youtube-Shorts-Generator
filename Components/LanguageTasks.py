@@ -65,6 +65,15 @@ model_name = _first_env(
     "LLM_MODEL",
     default=_registry_model_for_role(model_role) or "qwen2.5-72b-instruct",
 )
+_registry_reasoning_effort = ""
+try:
+    _registry_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config", "model_registry.json"))
+    with open(_registry_path, "r", encoding="utf-8") as _handle:
+        _registry = _json.load(_handle)
+    _model_key = _registry.get("roles", {}).get(model_role)
+    _registry_reasoning_effort = str(_registry.get("models", {}).get(_model_key, {}).get("reasoning_effort") or "")
+except (OSError, ValueError, TypeError):
+    pass
 
 
 def _llm_backend_mode() -> str:
@@ -530,7 +539,7 @@ def GetHighlight(Transcription):
         return None, None
 
 
-def _call_llm(system_prompt, user_content, temperature=0.7, _retries=3):
+def _call_llm(system_prompt, user_content, temperature=0.7, _retries=3, _json_mode=False):
     """Shared helper: call LLM, strip think blocks / fences, return raw text.
 
     Automatically checks the configured local LLM server.
@@ -552,6 +561,8 @@ def _call_llm(system_prompt, user_content, temperature=0.7, _retries=3):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content + "\n\n/no_think"},
                 ],
+                **({"reasoning_effort": _registry_reasoning_effort} if _registry_reasoning_effort else {}),
+                **({"response_format": {"type": "json_object"}} if _json_mode else {}),
             )
             text = (completion.choices[0].message.content or "").strip()
             text = _re.sub(r"<think>.*?</think>", "", text, flags=_re.DOTALL).strip()
@@ -1787,7 +1798,7 @@ def ValidateSermonHeadlineCandidateV3(
     if title.endswith(("…", "...", "-", "–", "—", "/")):
         reasons.append("truncated_word")
     if any(
-        char == "\ufffd" or unicodedata.category(char) in {"Cc", "Cs", "Co", "So"}
+        char == "\ufffd" or unicodedata.category(char) in {"Cc", "Cf", "Cs", "Co", "So"}
         for char in title
     ):
         reasons.append("unsafe_unicode")
@@ -1808,7 +1819,8 @@ def ValidateSermonHeadlineCandidateV3(
     if require_anchor and angle not in _HEADLINE_V3_ANGLES:
         reasons.append("angle_invalid")
 
-    normalized = dict(candidate)
+    allowed_fields = {"id", "title", "accent_word", "source_anchor", "angle"}
+    normalized = {key: value for key, value in candidate.items() if key in allowed_fields}
     normalized.update({"title": title, "accent_word": accent, "angle": angle, "source_anchor": anchor})
     return {"valid": not reasons, "reasons": reasons, "candidate": normalized}
 
@@ -1847,6 +1859,9 @@ def GenerateHeadlineCandidatesV3(
     language="de",
     temperature=0.5,
     max_retries=2,
+    prompt_path=None,
+    profile_name=None,
+    structured_json=False,
 ):
     """Generate eight challengers, repair invalid sets, and preserve audit data."""
     source_material = BuildSermonHeadlineSourceV3(
@@ -1859,7 +1874,7 @@ def GenerateHeadlineCandidatesV3(
     )
     source_text = "\n".join(str(value or "") for value in source_material.values())
     sensitive = DetectSensitiveHeadlineTopicsV3(source_material)
-    prompt = _load_headline_prompt(SERMON_THUMBNAIL_HEADLINE_V3_PROMPT_PATH)
+    prompt = _load_headline_prompt(prompt_path or SERMON_THUMBNAIL_HEADLINE_V3_PROMPT_PATH)
     base_user_msg = "Quellmaterial:\n" + _json.dumps(source_material, ensure_ascii=False, indent=2)
     attempts = []
     repair_reasons = []
@@ -1873,7 +1888,10 @@ def GenerateHeadlineCandidatesV3(
                 "und behebe diese deterministischen Fehler:\n- " + "\n- ".join(repair_reasons)
             )
         try:
-            raw = _call_llm(prompt, user_msg, temperature=float(temperature), _retries=1)
+            raw = _call_llm(
+                prompt, user_msg, temperature=float(temperature), _retries=1,
+                _json_mode=bool(structured_json),
+            )
             payload = _parse_json_object_response(raw)
             raw_candidates = payload.get("candidates")
             if not isinstance(raw_candidates, list):
@@ -1931,7 +1949,7 @@ def GenerateHeadlineCandidatesV3(
     final = attempts[-1]
     return {
         "ok": bool(final["valid_candidates"]),
-        "profile": SERMON_THUMBNAIL_HEADLINE_V3_PROFILE,
+        "profile": profile_name or SERMON_THUMBNAIL_HEADLINE_V3_PROFILE,
         "source_material": source_material,
         **sensitive,
         "attempts": attempts,
@@ -1956,6 +1974,7 @@ def SelectHeadlineWinnerV3(
     speaker="",
     channel="",
     retries=2,
+    structured_json=False,
 ):
     """Select conservatively from already validated titles at temperature zero."""
     source_text = "\n".join(str(value or "") for value in source_material.values())
@@ -1972,10 +1991,30 @@ def SelectHeadlineWinnerV3(
             require_anchor=False,
             require_accent=False,
         )
+        champion_validation["reasons"].extend(_sensitive_headline_reasons_v3(
+            champion_validation["candidate"].get("title", ""), source_text,
+            DetectSensitiveHeadlineTopicsV3(source_material)["sensitive_topics"] if sensitive_topic else [],
+        ))
+        champion_validation["valid"] = not champion_validation["reasons"]
         if champion_validation["valid"]:
             candidates.append({**champion_validation["candidate"], "source": "current_champion"})
     for challenger in valid_challengers or []:
-        candidates.append({**challenger, "source": "v3_challenger"})
+        checked = ValidateSermonHeadlineCandidateV3(
+            challenger, source_text=source_text, speaker=speaker, channel=channel,
+            require_anchor=False, require_accent=False,
+        )
+        checked["reasons"].extend(_sensitive_headline_reasons_v3(
+            checked["candidate"].get("title", ""), source_text,
+            DetectSensitiveHeadlineTopicsV3(source_material)["sensitive_topics"] if sensitive_topic else [],
+        ))
+        if not checked["reasons"]:
+            challenger_candidate = checked["candidate"]
+            if any(
+                challenger_candidate.get("title", "").casefold() == existing.get("title", "").casefold()
+                for existing in candidates
+            ):
+                continue
+            candidates.append({**challenger_candidate, "source": "v3_challenger"})
     if not candidates:
         return {
             "ok": False, "payload": None, "failures": ["no validated candidates"],
@@ -2001,7 +2040,10 @@ def SelectHeadlineWinnerV3(
                     "\n\nREPAIR: Die vorige Antwort war technisch unzulässig. Behebe: "
                     + failures[-1]
                 )
-            raw = _call_llm(prompt, user_msg, temperature=0.0, _retries=1)
+            raw = _call_llm(
+                prompt, user_msg, temperature=0.0, _retries=1,
+                _json_mode=bool(structured_json),
+            )
             payload = _parse_json_object_response(raw)
             winner_id = str(payload.get("winner_id") or "")
             runner_up_id = str(payload.get("runner_up_id") or "")
@@ -2046,6 +2088,16 @@ def SelectHeadlineWinnerV3(
             }
         except Exception as exc:
             failures.append(f"attempt {attempt}: {type(exc).__name__}: {exc}")
+    # A selector outage must not erase a known-good champion.
+    if candidates:
+        champion = next((item for item in candidates if item["source"] == "current_champion"), None)
+        if champion:
+            return {
+                "ok": True, "payload": {"winner_id": champion["id"], "winner_source": "current_champion",
+                "runner_up_id": "", "social_title": champion["title"], "winner_title": champion["title"]},
+                "failures": failures, "selector_calls": calls,
+                "current_champion_validation": champion_validation, "fallback": True,
+            }
     return {
         "ok": False, "payload": None, "raw_response": "", "failures": failures,
         "selector_calls": calls, "current_champion_validation": champion_validation,
@@ -2061,9 +2113,11 @@ def GenerateTitleHook(clip_content, clip_transcript="", video_title="", language
     """
     parts = [f"Video title: {video_title}"]
     if clip_transcript:
-        # Limit transcript to ~800 chars to avoid token waste
-        t = clip_transcript[:800]
-        if len(clip_transcript) > 800:
+        # Preserve the complete selected clip; highlight metadata is often at
+        # the end and contains the actual payoff. The upstream clip window is
+        # bounded, so a generous guard is safer than the old 800-char cut.
+        t = clip_transcript[:12000]
+        if len(clip_transcript) > 12000:
             t = t.rsplit(" ", 1)[0] + " …"
         parts.append(f"Transcript:\n{t}")
     parts.append(f"Content summary: {clip_content}")
@@ -2185,6 +2239,9 @@ def GenerateThumbnailBrief(
     speaker_name="",
     brand_label="",
     n_angles=1,
+    highlight=None,
+    hook="",
+    payoff_excerpt="",
 ):
     """Ask the LLM for a compact portrait-thumbnail brief.
 
@@ -2192,12 +2249,19 @@ def GenerateThumbnailBrief(
     hook variants (see :func:`GenerateThumbnailAngles`). The single-hook keys are
     unchanged, so the existing v2/v2_test callers are unaffected.
     """
+    highlight = highlight if isinstance(highlight, dict) else {}
+    hook = str(hook or highlight.get("hook") or "").strip()
+    payoff_excerpt = str(payoff_excerpt or highlight.get("payoff_excerpt") or "").strip()
     parts = [f"Video title: {video_title}"]
     if clip_transcript:
-        t = clip_transcript[:800]
-        if len(clip_transcript) > 800:
+        t = clip_transcript[:12000]
+        if len(clip_transcript) > 12000:
             t = t.rsplit(" ", 1)[0] + " ..."
         parts.append(f"Transcript:\n{t}")
+    if hook:
+        parts.append(f"Existing highlight hook (source context, do not copy blindly): {hook}")
+    if payoff_excerpt:
+        parts.append(f"Concrete payoff excerpt (highest-value source context): {payoff_excerpt}")
     parts.append(f"Content summary: {clip_content}")
     parts.append(f"Language: {language}")
     if speaker_name:
