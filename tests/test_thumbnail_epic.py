@@ -475,3 +475,35 @@ def test_story_asset_falls_back_to_repertoire_when_matting_fails(monkeypatch):
     assert image is not None
     assert captured["speaker_render"] == "ai_repertoire"
     assert captured["story_asset_ids"] == []
+
+
+def test_frame_full_bypasses_fallible_subject_matting(monkeypatch):
+    from types import SimpleNamespace
+
+    import Components.ThumbnailEpic as epic  # noqa: PLC0415
+    import Components.ThumbnailMatting as matting  # noqa: PLC0415
+    from Components.TitleCard import _render_epic_thumbnail  # noqa: PLC0415
+
+    def should_not_run(*_args, **_kwargs):
+        raise AssertionError("frame_full must not invoke subject matting")
+
+    captured = {}
+
+    def fake_compose(*_args, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(image=Image.new("RGB", (1080, 1920)), gate=None)
+
+    monkeypatch.setattr(matting, "extract_subject", should_not_run)
+    monkeypatch.setattr(epic, "compose", fake_compose)
+    frame = np.full((720, 1280, 3), 180, dtype=np.uint8)
+
+    image = _render_epic_thumbnail(
+        frame,
+        hook_text="WORT GOTTES IST LEBEN",
+        brief={"speaker_render": "frame_full"},
+    )
+
+    assert image is not None
+    assert captured["speaker_render"] == "frame_full"
+    assert captured["subject_rgba"] is None
+    assert captured["frame_bgr"] is frame

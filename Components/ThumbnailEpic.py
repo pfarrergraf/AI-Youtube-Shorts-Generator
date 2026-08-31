@@ -38,6 +38,7 @@ from Components.ThumbnailTypeEngine import TypeLayout, layout_and_render
 CANVAS_9X16 = (1080, 1920)
 
 SPEAKER_RENDERS = (
+    "frame_full",        # recognizable real frame; no fallible subject matting
     "frame_cinematic",   # real frame darkened as the stage, cutout on top — no server
     "real_procedural",   # matted cutout + procedural rim/rays — matting only
     "real_relight",      # cutout relit through img2img — ComfyUI
@@ -171,6 +172,7 @@ def build_stage(
     light_center: tuple[float, float] = (0.5, 0.40),
     seed: int = 0,
     darken: float = 0.30,
+    preserve_frame: bool = False,
 ) -> Image.Image:
     """Near-black stage with exactly one light source."""
     w, h = size
@@ -178,10 +180,12 @@ def build_stage(
         base = Image.fromarray(frame_bgr[:, :, ::-1]).convert("RGB")
         base = _cover_resize(base, size)
         arr = np.asarray(base, dtype=np.float32) / 255.0
-        arr = arr * darken
-        canvas = Image.fromarray((arr * 255).astype(np.uint8), "RGB").filter(
-            __import__("PIL.ImageFilter", fromlist=["ImageFilter"]).GaussianBlur(max(6, w // 90))
-        )
+        arr = arr * (max(darken, 0.62) if preserve_frame else darken)
+        canvas = Image.fromarray((arr * 255).astype(np.uint8), "RGB")
+        if not preserve_frame:
+            canvas = canvas.filter(
+                __import__("PIL.ImageFilter", fromlist=["ImageFilter"]).GaussianBlur(max(6, w // 90))
+            )
     else:
         canvas = Image.new("RGB", size, (7, 8, 11))
 
@@ -613,9 +617,10 @@ def compose(
         canvas = build_stage(
             size,
             recipe,
-            frame_bgr=frame_bgr if speaker_render == "frame_cinematic" else None,
+            frame_bgr=frame_bgr if speaker_render in {"frame_cinematic", "frame_full"} else None,
             light_center=light_center,
             seed=seed,
+            preserve_frame=speaker_render == "frame_full",
         )
 
     if speaker_render == "real_relight" and subject_rgba is not None:
@@ -668,7 +673,7 @@ def compose(
                 max(1, int(round(fw * scale))),
                 max(1, int(round(fh * scale))),
             )
-    elif speaker_render in {"ai_hero", "ai_repertoire"}:
+    elif speaker_render in {"ai_hero", "ai_repertoire", "frame_full"}:
         canvas_face_box = _detect_largest_face_box(canvas)
         if canvas_face_box is not None:
             _, fy, _, fh = canvas_face_box

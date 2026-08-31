@@ -1337,15 +1337,23 @@ def _render_epic_thumbnail(frame_bgr, *, hook_text, brief=None):
             if angles:
                 accent_line = angles[0].get("accent_line")
 
-        matte = extract_subject(frame_bgr, isolate_primary=True)
-        face_box = estimate_face_box(matte.subject_rgba)
+        requested_render = str((brief or {}).get("speaker_render") or "").strip()
+        if requested_render == "frame_full":
+            subject_rgba = None
+            face_box = None
+        else:
+            matte = extract_subject(frame_bgr, isolate_primary=True)
+            subject_rgba = matte.subject_rgba
+            face_box = estimate_face_box(subject_rgba)
         speaker_name = str((brief or {}).get("speaker_name") or "").strip() if isinstance(brief, dict) else ""
         story_asset_ids = list((brief or {}).get("story_asset_ids") or []) if isinstance(brief, dict) else []
         # Narrative plates need the exact real speaker as an independent layer.
         # Full AI heroes already contain their own background and cannot be
         # restacked without destroying the intended depth and light direction.
-        speaker_render = "real_procedural" if story_asset_ids else ("ai_repertoire" if speaker_name else "real_procedural")
-        if speaker_render == "real_procedural" and matte.subject_rgba is None and speaker_name:
+        speaker_render = requested_render or (
+            "real_procedural" if story_asset_ids else ("ai_repertoire" if speaker_name else "real_procedural")
+        )
+        if speaker_render == "real_procedural" and subject_rgba is None and speaker_name:
             # A story background needs a real subject cutout layered over it;
             # matting can genuinely fail (rembg unavailable inside the loaded
             # GPU process, grabcut's cutout quality-rejected — both real, not
@@ -1360,7 +1368,7 @@ def _render_epic_thumbnail(frame_bgr, *, hook_text, brief=None):
         hero_seed = int.from_bytes(hashlib.sha256(hook_text.encode("utf-8")).digest()[:2], "big")
         result = compose(
             hook_text,
-            subject_rgba=matte.subject_rgba,
+            subject_rgba=subject_rgba,
             subject_face_box=face_box,
             frame_bgr=frame_bgr,
             mood=mood,
