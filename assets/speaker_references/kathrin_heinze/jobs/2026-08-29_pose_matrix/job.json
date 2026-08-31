@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-29",
+  "speaker_key": "kathrin_heinze",
+  "display_name": "Kathrin Heinze",
+  "status": "manual_review_required",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kathrin_heinze/source/kathrin_heinze_official_gadw.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kathrin_heinze/source/pose_frames/kathrin_5185s.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kathrin_heinze/source/pose_frames/kathrin_4045s.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/kathrin_heinze/source/pose_frames/kathrin_4505s.jpg"
+  ],
+  "jobs": [
+    {
+      "pose_id": "joyful_breakthrough",
+      "prompt_path": "joyful_breakthrough.prompt.txt",
+      "output": "kathrin_heinze_joyful_breakthrough_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "direct_challenge",
+      "prompt_path": "direct_challenge.prompt.txt",
+      "output": "kathrin_heinze_direct_challenge_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "hopeful_invitation",
+      "prompt_path": "hopeful_invitation.prompt.txt",
+      "output": "kathrin_heinze_hopeful_invitation_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    }
+  ],
+  "approved": false
+}

@@ -208,7 +208,32 @@ BALLOON_START_BLUR = 7          # resolves with the spoken-word reveal
 # animation always finished before the word was heard. "Gleichzeitig" beats
 # "pop fully settled": a small fixed lead-in instead, independent of how long
 # the pop itself takes. The animation now keeps running into the spoken word.
-BALLOON_LEAD_IN_SEC = 0.045
+BALLOON_LEAD_IN_SEC = 0.0
+# Benjamin, 2026-08-30: still reading as "ahead of the voice". Measured on the
+# Oberlahnstein 30.08. audio over 91 words that follow a real pause (so the
+# onset detector cannot latch onto the previous word): the audible onset sits a
+# median of +75 ms AFTER the ASR timestamp, and later in 82% of cases. The word
+# times are systematically early, so every caption was too - independently of
+# the balloon lead-in, which is now zero. Shifting the display times by this
+# amount is what makes "exactly with the audio" true rather than nominal.
+_DEFAULT_ASR_ONSET_CORRECTION_SEC = 0.075
+
+
+def _configured_asr_onset_correction_sec():
+    """Read the per-recording-lane offset, failing closed on bad values."""
+    raw = os.getenv("CAPTION_ASR_ONSET_CORRECTION_SEC")
+    if raw is None or not raw.strip():
+        return _DEFAULT_ASR_ONSET_CORRECTION_SEC
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ValueError("CAPTION_ASR_ONSET_CORRECTION_SEC must be a number") from exc
+    if not -0.25 <= value <= 0.35:
+        raise ValueError("CAPTION_ASR_ONSET_CORRECTION_SEC must be between -0.25 and 0.35")
+    return value
+
+
+ASR_ONSET_CORRECTION_SEC = _configured_asr_onset_correction_sec()
 # The balloon deliberately dominates far more than the shared 1.5x emphasis
 # scale — the punch word is meant to shove its neighbours aside.
 BALLOON_EMPHASIS_SCALE = 2.2
@@ -238,6 +263,20 @@ BALLOON_MOTION_PROFILES = {
         "fade_ms": 150,
         "start_blur": 3,
         "emphasis_scale": 1.8,
+    },
+    # Fast delivery. Measured on the Oberlahnstein 30.08. sermon: median 194 wpm,
+    # i.e. a new word roughly every 300 ms. A strong pop at that rate is visual
+    # noise, so this tier keeps the word-by-word build-up but almost drops the
+    # motion - the reveal itself carries the rhythm.
+    "subtle": {
+        "start_scale": 84,
+        "overshoot_scale": 104,
+        "inflate_ms": 70,
+        "settle_ms": 55,
+        "start_alpha": "&HB0&",
+        "fade_ms": 90,
+        "start_blur": 1,
+        "emphasis_scale": 1.5,
     },
 }
 
@@ -437,8 +476,12 @@ def _merge_short_phrases(phrases):
 
         prev = merged[-1]
         prev_ends_hard = _ends_with_hard_punct(prev[-1]["text"])
+        crosses_silence_break = (
+            float(phrase[0]["start"]) - float(prev[-1]["end"])
+            >= SILENCE_GAP_BREAK_SEC
+        )
 
-        if is_too_short or not prev_ends_hard:
+        if (is_too_short or not prev_ends_hard) and not crosses_silence_break:
             candidate = prev + phrase
             if (
                 len(candidate) <= MAX_PHRASE_WORDS
@@ -452,7 +495,14 @@ def _merge_short_phrases(phrases):
 
     if len(merged) >= 2:
         last = merged[-1]
-        if len(last) < MIN_PHRASE_WORDS or _phrase_duration(last) < MIN_PHRASE_DURATION:
+        crosses_silence_break = (
+            float(last[0]["start"]) - float(merged[-2][-1]["end"])
+            >= SILENCE_GAP_BREAK_SEC
+        )
+        if (
+            not crosses_silence_break
+            and (len(last) < MIN_PHRASE_WORDS or _phrase_duration(last) < MIN_PHRASE_DURATION)
+        ):
             candidate = merged[-2] + last
             if (
                 len(candidate) <= MAX_PHRASE_WORDS
@@ -922,11 +972,22 @@ def _phrase_wpm(phrase):
 def _mark_balloon_eligibility(phrases):
     for phrase in phrases:
         wpm = _phrase_wpm(phrase)
-        level = None
-        if wpm < BALLOON_MAX_WPM:
+        # The speaking rate decides how big the pop is, NOT whether the words
+        # build up one at a time. Gating the reveal on it meant that at this
+        # speaker's 194 wpm median, 69% of phrases showed all four words at
+        # once - which reads as the caption running ahead of the voice, because
+        # words b, c and d stand there before they are spoken.
+        if wpm == float("inf"):
+            # Retimed or otherwise unreliable timings. The build-up would be
+            # keyed to invented word starts, so it stays off entirely - the
+            # rate here measures the retimer, not the speaker.
+            level = None
+        elif wpm < BALLOON_MAX_WPM:
             level = "strong"
         elif wpm < BALLOON_MEDIUM_MAX_WPM:
             level = "medium"
+        else:
+            level = "subtle"
         for word in phrase:
             word["balloon_eligible"] = level is not None
             # The rate this level was decided from, kept on the words so a
@@ -1633,7 +1694,7 @@ def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0,
 
         phrase_lead_in = lead_in if phrase[0].get("balloon_eligible") else 0.0
         for j, w in enumerate(phrase):
-            ws = max(w["start"] - phrase_lead_in, cursor)
+            ws = max(w["start"] + ASR_ONSET_CORRECTION_SEC - phrase_lead_in, cursor)
             # A solo word is its own phrase, so it would otherwise inherit the
             # full inter-phrase hold and linger on screen long after it was
             # spoken — which defeats the point of word-by-word pacing.
@@ -1643,13 +1704,14 @@ def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0,
                 # Mid-phrase: use next word's start (no gap within phrase).
                 # The next event pulls its own start forward by lead_in too,
                 # so this one must end at that same earlier point.
-                we = max(ws + 0.001, phrase[j + 1]["start"] - phrase_lead_in)
+                we = max(ws + 0.001,
+                         phrase[j + 1]["start"] + ASR_ONSET_CORRECTION_SEC - phrase_lead_in)
             elif i + 1 < total and word_events[i + 1]:
                 # Last word of phrase: hold briefly, but never overlap next phrase
                 natural = w["end"] + hold
                 next_phrase = word_events[i + 1]
                 next_lead_in = lead_in if next_phrase[0].get("balloon_eligible") else 0.0
-                next_start = next_phrase[0]["start"] - next_lead_in
+                next_start = next_phrase[0]["start"] + ASR_ONSET_CORRECTION_SEC - next_lead_in
                 we = min(natural, next_start)
                 we = max(we, ws + 0.001)
             else:
@@ -1671,8 +1733,8 @@ def _normalise_phrase_timings(word_events, caption_cutoff=None, lead_in=0.0,
                 "spoken_start": w["start"], "spoken_end": w["end"],
             }
             for key in ("emphasis", "solo", "synthetic", "balloon_eligible",
-                        "balloon_level", "pacing_wpm"):
-                if w.get(key):
+                        "balloon_level", "pacing_wpm", "probability", "timing_source"):
+                if key in w:
                     carried[key] = w[key]
             copied.append(carried)
             cursor = we
@@ -2057,22 +2119,32 @@ def _build_word_events(
         start = max(0, start)
         if video_duration > 0:
             end = min(video_duration, end)
-        # _smart_pad_end snaps the clip end onto a segment boundary, which is
-        # regularly the *start* of the next word -- so a word starting exactly
-        # at video_duration is not a rare edge case (3 of 15 real ICF
-        # highlights). The clamp above then collapsed it to zero length: an
-        # invisible caption event that still counted as the clip's last
-        # spoken word and so dragged the caption cutoff onto itself. It is not
-        # audible in this clip at all; drop it like any other out-of-range word.
+        # _smart_pad_end can collapse the first word beyond the clip boundary
+        # to zero length; that boundary-only word is correctly dropped below.
+        # A zero-span word *inside* the clip is different: Whisper really did
+        # emit its text, so preserve it for the synthetic repair pass.
         if end <= start:
-            continue
+            # Whisper can assign several real tokens the same boundary.  They
+            # must reach the repair pass below; dropping them silently removes
+            # spoken words from karaoke captions.  The provisional span is
+            # explicitly synthetic and may be redistributed with neighbours.
+            if video_duration > 0 and start >= video_duration:
+                continue
+            end = start + _MIN_REPAIRED_SPAN_SEC
+            if video_duration > 0:
+                end = min(video_duration, end)
+            if end <= start:
+                continue
 
         text = (w["text"] or "").strip()
         if text and not text.startswith("["):
             entry = {"text": text, "start": start, "end": end}
-            for key in ("emphasis", "synthetic"):
-                if w.get(key):
+            for key in ("emphasis", "synthetic", "probability", "timing_source"):
+                if key in w:
                     entry[key] = w[key]
+            if float(w["end"]) <= float(w["start"]):
+                entry["synthetic"] = True
+                entry["timing_source"] = "repaired_zero_span"
             adjusted.append(entry)
         elif text:
             dropped += 1

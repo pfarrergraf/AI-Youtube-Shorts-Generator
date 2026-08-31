@@ -452,6 +452,74 @@ _MULTI_HIGHLIGHT_PROMPT_VERSION = _hashlib.md5(
     MULTI_HIGHLIGHT_PROMPT.encode(), usedforsecurity=False
 ).hexdigest()[:12]
 
+SERMON_STRUCTURE_PROMPT = """\\
+You are a sermon editor. Analyse the supplied timestamped SPOKEN transcript before
+selecting any clips. Return ONLY one JSON object. The transcript is authoritative;
+an optional manuscript is context only.
+
+Map the actual rhetorical flow into non-overlapping blocks. A block may be a
+thesis, biblical exposition, story/illustration, argument/reason, concrete
+application, objection/question, quotation, transition, or conclusion. Preserve
+the link between blocks: a thesis needs its support; a story needs its point.
+Also identify explicit rhetorical devices only when audible in the text (for
+example: anaphora, antithesis, rhetorical question, metaphor, repetition,
+three-part list, direct address, contrast, escalation). Never invent a device.
+
+Return:
+{
+  "overall_thesis": "short spoken-sermon summary",
+  "blocks": [{
+    "start": 0.0, "end": 0.0,
+    "role": "thesis|biblical_exposition|story|argument|example|application|objection|quote|transition|conclusion",
+    "summary": "what is actually said",
+    "depends_on": ["earlier block index, if context is required"],
+    "payoff": "the resolved claim, or empty string",
+    "rhetorical_devices": [{"type": "anaphora|antithesis|...", "excerpt": "short verbatim excerpt"}]
+  }]
+}
+Use exact transcript timestamps. Blocks must be coherent thought units, not every
+sentence. A standalone highlight may only be derived from one block or from a
+contiguous chain whose dependencies and payoff it contains."""
+
+_SERMON_STRUCTURE_PROMPT_VERSION = _hashlib.md5(
+    SERMON_STRUCTURE_PROMPT.encode(), usedforsecurity=False
+).hexdigest()[:12]
+
+
+def AnalyseSermonStructure(Transcription, reference_text=None, speaker_profile_text=None):
+    """Build an auditable rhetorical map before highlight selection.
+
+    Fail closed to ``None``: a malformed map must never fabricate highlight
+    boundaries.  The caller can then retain the established selection path.
+    """
+    try:
+        user_content = "=== Spoken transcript (authoritative) ===\\n" + str(Transcription)
+        if reference_text:
+            user_content += "\\n\\n=== Manuscript context (non-authoritative) ===\\n" + str(reference_text).strip()
+        if speaker_profile_text:
+            user_content += "\\n\\n=== Speaker vocabulary context only ===\\n" + str(speaker_profile_text).strip()
+        parsed = _json.loads(_call_llm(SERMON_STRUCTURE_PROMPT, user_content, temperature=0.2))
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("blocks"), list):
+            return None
+        valid = []
+        for block in parsed["blocks"]:
+            if not isinstance(block, dict):
+                continue
+            try:
+                start, end = float(block["start"]), float(block["end"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if end <= start or not str(block.get("summary") or "").strip():
+                continue
+            valid.append({**block, "start": start, "end": end})
+        if not valid:
+            return None
+        parsed["blocks"] = sorted(valid, key=lambda block: block["start"])
+        return parsed
+    except Exception as exc:
+        print(f"Sermon structure analysis failed: {exc}")
+        return None
+
 
 def GetHighlight(Transcription):
     from openai import OpenAI
@@ -967,7 +1035,7 @@ def CleanTranscriptSegments(
     return cleaned
 
 
-def GetAllHighlights(Transcription, reference_text=None, speaker_profile_text=None):
+def GetAllHighlights(Transcription, reference_text=None, speaker_profile_text=None, sermon_structure=None):
     """Analyze the full transcription and return ALL highlight-worthy segments.
 
     Returns a list of dicts sorted by impact score (highest first):
@@ -1011,6 +1079,14 @@ def GetAllHighlights(Transcription, reference_text=None, speaker_profile_text=No
                     + str(speaker_profile_text).strip()
                     + "\n\n=== Transcript ===\n"
                     + (user_content if user_content is not chunk else chunk)
+                )
+            if sermon_structure:
+                user_content = (
+                    "Precomputed sermon structure (derived from the same spoken transcript):\\n"
+                    "Use it to keep dependent thesis, support and payoff together; do not treat it as new wording.\\n"
+                    + _json.dumps(sermon_structure, ensure_ascii=False)
+                    + "\\n\\n=== Transcript ===\\n"
+                    + user_content
                 )
             text = _call_llm(highlight_prompt, user_content, temperature=0.5)
             try:
@@ -1292,6 +1368,23 @@ _GERMAN_STOPWORDS = {
 }
 
 
+# German thumbnail copy occasionally arrives with visually indistinguishable
+# Cyrillic letters (for example ``ENTSPANNТ`` with Cyrillic U+0422).  The type
+# engine then renders a missing-glyph box even though the headline looks valid
+# in logs.  Convert only the common visual homoglyphs; any other non-Latin
+# letter remains detectable by the fail-closed hook validator below.
+_THUMBNAIL_CYRILLIC_HOMOGLYPHS = str.maketrans({
+    "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H",
+    "О": "O", "Р": "P", "С": "C", "Т": "T", "У": "Y", "Х": "X",
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x",
+})
+
+
+def _normalise_thumbnail_latin_text(value):
+    text = unicodedata.normalize("NFKC", str(value or ""))
+    return " ".join(text.translate(_THUMBNAIL_CYRILLIC_HOMOGLYPHS).split())
+
+
 def _hook_words(text):
     return re.findall(r"[A-Za-zÄÖÜäöüß']+", str(text or ""))
 
@@ -1301,9 +1394,15 @@ def _transcript_word_set(text):
 
 
 def _is_invalid_hook(hook, keyword, clip_transcript="", language="de"):
-    hook = " ".join(str(hook or "").split()).strip()
-    keyword = " ".join(str(keyword or "").split()).strip()
+    hook = _normalise_thumbnail_latin_text(hook)
+    keyword = _normalise_thumbnail_latin_text(keyword)
     if not hook:
+        return True
+
+    if any(
+        char.isalpha() and "LATIN" not in unicodedata.name(char, "")
+        for char in hook + keyword
+    ):
         return True
 
     lowered = hook.lower()
@@ -1343,9 +1442,13 @@ def _fallback_title_hook(clip_content, clip_transcript="", language="de"):
         if primary:
             candidate = re.sub(r"\b(move|church|wiesbaden|predigt|predigtclip|kanzelclips)\b", "", primary, flags=re.IGNORECASE)
             candidate = " ".join(candidate.split()).upper()
-            if 5 <= len(candidate) <= 28 and len(_hook_words(candidate)) <= 5:
-                keyword = max(_hook_words(candidate), key=len)
-                return candidate, keyword
+            # "<= 5" was also satisfied by ZERO words, and max() on an empty
+            # sequence raises. That killed a whole clip mid-render when every
+            # LLM hook had been rejected and the title reduced to nothing
+            # after the brand words were stripped.
+            candidate_words = _hook_words(candidate)
+            if 5 <= len(candidate) <= 28 and 1 <= len(candidate_words) <= 5:
+                return candidate, max(candidate_words, key=len)
 
     if str(language or "").lower().startswith("de") and transcript_words:
         filtered = [word for word in transcript_words if len(word) >= 4 and word.lower() not in _GERMAN_STOPWORDS]
@@ -2276,6 +2379,8 @@ def GenerateThumbnailBrief(
         video_title=video_title,
         language=language,
     )
+    hook_fallback = _normalise_thumbnail_latin_text(hook_fallback)
+    accent_fallback = _normalise_thumbnail_latin_text(accent_fallback)
     fallback = {
         "hook_text": hook_fallback,
         "accent_keyword": accent_fallback,
@@ -2315,8 +2420,8 @@ def GenerateThumbnailBrief(
         payload = _json.loads(cleaned)
         if not isinstance(payload, dict):
             return fallback
-        hook_text = " ".join(str(payload.get("hook_text") or "").split())[:28]
-        accent_keyword = " ".join(str(payload.get("accent_keyword") or "").split())
+        hook_text = _normalise_thumbnail_latin_text(payload.get("hook_text"))[:28]
+        accent_keyword = _normalise_thumbnail_latin_text(payload.get("accent_keyword"))
         if not hook_text:
             return fallback
         if accent_keyword.upper() not in hook_text.upper():
@@ -2341,7 +2446,7 @@ def GenerateThumbnailBrief(
         background_negative_prompt = " ".join(str(payload.get("background_negative_prompt") or "").split())[:240]
         if not background_negative_prompt:
             background_negative_prompt = _DEFAULT_BACKGROUND_NEGATIVE
-        social_title = " ".join(str(payload.get("social_title") or "").split())[:90]
+        social_title = _normalise_thumbnail_latin_text(payload.get("social_title"))[:90]
         if not social_title:
             social_title = fallback["social_title"]
         if hook_text.upper() not in social_title.upper():

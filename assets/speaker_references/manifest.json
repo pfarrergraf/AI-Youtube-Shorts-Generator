@@ -965,6 +965,75 @@
           "review_note": "Identity, glasses, hands and microphone manually reviewed on 2026-08-29."
         }
       ]
+    },
+    "kathrin_heinze": {
+      "display_name": "Kathrin Heinze",
+      "source_images": [
+        {
+          "path": "kathrin_heinze/source/kathrin_heinze_official_gadw.jpg",
+          "role": "official_identity",
+          "source_url": "https://www.gadw.org/wp-content/uploads/brizy/imgs/IMG_0711-524x524x0x0x408x524x1657721878.jpg"
+        },
+        {
+          "path": "kathrin_heinze/source/pose_frames/kathrin_5185s.jpg",
+          "role": "sermon_identity_and_posture",
+          "source_url": "https://www.youtube.com/watch?v=CnkQdJCIlZc",
+          "source_timestamp_sec": 5185
+        },
+        {
+          "path": "kathrin_heinze/source/pose_frames/kathrin_4045s.jpg",
+          "role": "sermon_gesture",
+          "source_url": "https://www.youtube.com/watch?v=CnkQdJCIlZc",
+          "source_timestamp_sec": 4045
+        },
+        {
+          "path": "kathrin_heinze/source/pose_frames/kathrin_4505s.jpg",
+          "role": "sermon_storytelling",
+          "source_url": "https://www.youtube.com/watch?v=CnkQdJCIlZc",
+          "source_timestamp_sec": 4505
+        }
+      ],
+      "heroes": []
+    },
+    "sissi_magdowski": {
+      "display_name": "Sissi Magdowski",
+      "source_images": [
+        {
+          "path": "sissi_magdowski/source/sissi_magdowski_official_gadw.jpg",
+          "role": "official_identity",
+          "source_url": "https://www.gadw.org/wp-content/uploads/brizy/imgs/20220921-26-Bearbeitet-scaled-524x524x0x0x524x524x1663920873.jpg"
+        },
+        {
+          "path": "sissi_magdowski/source/pose_frames/sissi_5885s.jpg",
+          "role": "sermon_identity_and_posture",
+          "source_url": "https://www.youtube.com/watch?v=vMWayu0Wp9g",
+          "source_timestamp_sec": 5885
+        },
+        {
+          "path": "sissi_magdowski/source/pose_frames/sissi_5340s.jpg",
+          "role": "sermon_gesture",
+          "source_url": "https://www.youtube.com/watch?v=vMWayu0Wp9g",
+          "source_timestamp_sec": 5340
+        },
+        {
+          "path": "sissi_magdowski/source/pose_frames/sissi_5160s.jpg",
+          "role": "sermon_storytelling",
+          "source_url": "https://www.youtube.com/watch?v=vMWayu0Wp9g",
+          "source_timestamp_sec": 5160
+        }
+      ],
+      "heroes": []
+    },
+    "gudrun_bonnen": {
+      "display_name": "Gudrun Bonnen",
+      "source_images": [
+        {
+          "path": "gudrun_bonnen/source/gudrun_bonnen_official_gadw.jpg",
+          "role": "official_identity",
+          "source_url": "https://www.gadw.org/wp-content/uploads/brizy/imgs/20220907-80-scaled-526x526x2x0x524x526x1663920802.jpg"
+        }
+      ],
+      "heroes": []
     }
   }
 }

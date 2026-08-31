@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "provider": "azure_openai_api",
+  "created": "2026-08-29",
+  "speaker_key": "sissi_magdowski",
+  "display_name": "Sissi Magdowski",
+  "status": "manual_review_required",
+  "references": [
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/sissi_magdowski/source/sissi_magdowski_official_gadw.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/sissi_magdowski/source/pose_frames/sissi_5885s.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/sissi_magdowski/source/pose_frames/sissi_5340s.jpg",
+    "/home/benjamin_graf/parakeet_uv/ai-youtube-shorts-generator/assets/speaker_references/sissi_magdowski/source/pose_frames/sissi_5160s.jpg"
+  ],
+  "jobs": [
+    {
+      "pose_id": "joyful_breakthrough",
+      "prompt_path": "joyful_breakthrough.prompt.txt",
+      "output": "sissi_magdowski_joyful_breakthrough_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "direct_challenge",
+      "prompt_path": "direct_challenge.prompt.txt",
+      "output": "sissi_magdowski_direct_challenge_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    },
+    {
+      "pose_id": "hopeful_invitation",
+      "prompt_path": "hopeful_invitation.prompt.txt",
+      "output": "sissi_magdowski_hopeful_invitation_candidate_v1.png",
+      "status": "manual_review_required",
+      "approved": false
+    }
+  ],
+  "approved": false
+}
